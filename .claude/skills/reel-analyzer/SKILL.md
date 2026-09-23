@@ -16,10 +16,12 @@ description: 인스타그램 릴스 링크를 받아 캡션·화면 글자·음�
 
 ## 변수
 
+- `SKILL_DIR`: 이 스킬 폴더. 스킬이 로드될 때 표시되는 "Base directory" 경로를 쓴다(예: `C:\Users\<이름>\.claude\skills\reel-analyzer`). 저장소 안에서 쓰든 사용자 폴더에 설치해서 쓰든 이 값만 바뀐다
 - `ID`: 링크의 `/reel/<ID>/` 또는 `/p/<ID>/` 부분
-- `OUT`: `reels/<ID>` (저장소 루트 기준)
-- `PY`: 가상환경 파이썬. Windows는 `.venv/Scripts/python.exe`, macOS·Linux는 `.venv/bin/python`
-- `TOOLS`: `.claude/skills/reel-analyzer/scripts/reel_tools.py`
+- `OUT`: 현재 작업 폴더 기준 `reels/<ID>`
+- `PY`: 스킬 전용 가상환경 파이썬. Windows는 `SKILL_DIR/.venv/Scripts/python.exe`, macOS·Linux는 `SKILL_DIR/.venv/bin/python`
+- `TOOLS`: `SKILL_DIR/scripts/reel_tools.py`
+- 경로에 한글·공백이 있을 수 있으니 명령에서 경로는 항상 따옴표로 감싼다
 
 ## 0단계: 준비 확인 (첫 실행 때만 오래 걸림)
 
@@ -28,8 +30,8 @@ description: 인스타그램 릴스 링크를 받아 캡션·화면 글자·음�
    - Windows: `py -3 --version`으로 파이썬 확인 → 없으면 `winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements`
      - 설치 직후 `py`가 안 잡히면 `"$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"`를 직접 쓴다.
      - `python`은 Microsoft Store 바로가기일 수 있으니 `py -3`을 우선 쓴다.
-   - `py -3 -m venv .venv` (macOS·Linux는 `python3 -m venv .venv`)
-3. `PY -m pip install -r .claude/skills/reel-analyzer/requirements.txt`
+   - `py -3 -m venv "SKILL_DIR/.venv"` (macOS·Linux는 `python3 -m venv "SKILL_DIR/.venv"`)
+3. `"PY" -m pip install -r "SKILL_DIR/requirements.txt"`
 4. `mkdir OUT`
 
 ## 1단계: 캡션·작성자 읽기
@@ -134,6 +136,8 @@ PY TOOLS frames OUT/media.mp4 OUT/frames --max 15
 5. 확보 실패한 항목이 있으면 무엇이 왜 실패했는지 한 줄
 
 ## 8단계: 결과 올리기 (클라우드 세션과 공유)
+
+**현재 폴더가 이 조사 저장소(`search_for_skill_products`)일 때만** 한다. 다른 폴더면 건너뛰고 파일 위치만 알려준다.
 
 텍스트 결과만 커밋해서 GitHub에 올린다. 영상·음성·캡처는 `.gitignore`로 빠진다.
 ```

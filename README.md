@@ -5,6 +5,24 @@
 - 표기: **[확인]** 원문 페이지에서 직접 확인 · **[추정]** 제 판단 · **확인 불가** 막혀서 못 본 것
 - 별 수·버전은 조사일 기준입니다.
 
+## 스킬 설치 (Windows)
+
+이 저장소에는 직접 만든 스킬 2개가 있습니다: `reel-analyzer`(릴스 자동 분석), `idea-blueprint`(아이디어 설계도).
+
+**PC에 설치 (어느 폴더에서든 사용)** — 저장소 폴더에서 PowerShell:
+```powershell
+git pull
+powershell -ExecutionPolicy Bypass -File .\install-skills.ps1
+```
+- `%USERPROFILE%\.claude\skills\`에 복사됩니다. 터미널 `claude`와 데스크톱 앱의 **Local** 세션이 여기서 스킬을 읽습니다.
+- 스킬을 고친 뒤 다시 실행하면 업데이트됩니다(이미 설치된 Python 환경은 유지).
+
+**Claude 앱(채팅)에 올리기** — `idea-blueprint`만 해당:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-skills.ps1 -Zip
+```
+`dist\idea-blueprint.zip`을 Claude 앱의 Customize → Skills → + → Create skill에서 업로드합니다. `reel-analyzer`는 PC의 크롬과 Python이 필요해서 채팅 앱에서는 동작하지 않습니다.
+
 ## 한눈에 보기
 
 | # | 항목 | 한줄 결론 | 판정 | 바로 할 일 |
@@ -337,13 +355,14 @@ npx skills add vercel-labs/json-render --skill core
    ```powershell
    irm https://claude.ai/install.ps1 | iex
    ```
-2. 이 저장소 받기
+2. 이 저장소 받고 스킬 설치
    ```powershell
    git clone https://github.com/bincodin-ko/search_for_skill_products
    cd search_for_skill_products
+   powershell -ExecutionPolicy Bypass -File .\install-skills.ps1
    ```
    git이 없으면 GitHub에서 ZIP으로 받아 압축 풀고 그 폴더에서 PowerShell 열기
-3. 크롬 연동으로 실행
+3. 크롬 연동으로 실행 (아무 폴더에서나 가능)
    ```powershell
    claude --chrome
    ```
@@ -357,7 +376,7 @@ npx skills add vercel-labs/json-render --skill core
 
 - 첫 실행: Python·받아쓰기 엔진·한국어 음성 모델(약 1.6GB)을 설치하느라 약 10분. 권한 확인 창이 몇 번 뜨면 허용
 - 이후: 릴스 1개에 약 1~2분
-- 결과: `reels/<릴스ID>/analysis.md`
+- 결과: 실행한 폴더의 `reels/<릴스ID>/analysis.md`
 - 동작 원리와 파일 구성: [`.claude/skills/reel-analyzer/SKILL.md`](.claude/skills/reel-analyzer/SKILL.md)
 
 ### 릴스와 별개로: 검증된 방법 (2025~2026)

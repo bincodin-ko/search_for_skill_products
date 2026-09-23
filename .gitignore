@@ -6,3 +6,4 @@ reels/**/*.mp4
 reels/**/*.m4a
 reels/**/frames/
 reels/**/media_urls.txt
+dist/
