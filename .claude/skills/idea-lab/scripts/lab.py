@@ -2,26 +2,33 @@
 """idea-lab board manager (standard library only).
 
 The board lives in lab/board.json under the current folder. Claude and the
-dashboard both read and write that one file.
+dashboard both read and write that one file. Research notes live next to it
+in lab/ideas/<id>.md.
 
   init                          create lab/board.json
-  add --title T --p P --s S     add an idea at the ideation stage
-  list [--stage S]              show ideas grouped by stage
-  show ID                       print one idea as JSON
-  move ID STAGE                 move an idea and log the decision
-  score ID key=value ...        record review scores (1-5)
+  add --title T --p P --s S     add an idea at the ideation stage (--from ID for a pivot)
+  list [--stage S]              show ideas grouped by stage, with scores
+  status                        one-line funnel summary for reports
+  show ID                       print one idea as JSON (+ research file path)
+  move ID STAGE --reason R      move an idea and log the decision
+  score ID key=value ...        record scores (1-5); --prelim for provisional ones
+  note ID --text T | --file F   set the idea's dashboard note
+  edit ID [--title] [--p] [--s]  rewrite title / P-Code / S-Code (logged)
   fdt ID --visits N ...         record fake-door-test numbers and judge them
   due                           ideas in review whose 2-day review is due
+  set key=value ...             change settings (analytics, ga4_id, thresholds...)
   serve [--port 8765]           open the dashboard (reads/writes board.json)
 """
 import argparse
 import datetime as dt
 import json
 import os
+import re
+import socket
 import sys
 import tempfile
 import webbrowser
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 STAGES = ["ideation", "incubating", "brainstorming", "filtering", "review", "done", "dropped"]
@@ -34,7 +41,13 @@ STAGE_LABELS = {
     "done": "DONE",
     "dropped": "Drop",
 }
+SHORT_LABELS = {
+    "ideation": "Ideation", "incubating": "Incubating", "brainstorming": "Brainstorming",
+    "filtering": "Filtering", "review": "리뷰", "done": "DONE", "dropped": "Drop",
+}
+ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]
+SCORE_KEYS = ["need", "revenue", "tenx", "easy", "moat", "scale"]
 DEFAULT_SETTINGS = {
     "max_parallel": 10,
     "fdt_min_visits": 200,
@@ -42,8 +55,12 @@ DEFAULT_SETTINGS = {
     "fdt_retry_rate": 0.02,
     "review_every_days": 2,
     "target_monthly_profit_krw": 3000000,
+    "analytics": "",   # ga4 | umami | plausible (asked once, before the first FDT page)
+    "ga4_id": "",      # G-XXXXXXXXXX
 }
+NUMERIC_SETTINGS = {k for k, v in DEFAULT_SETTINGS.items() if isinstance(v, (int, float))}
 SCRIPT_DIR = Path(__file__).resolve().parent
+ID_RE = re.compile(r"^i\d{3,}$")
 
 
 def now():
@@ -54,20 +71,37 @@ def board_path(args):
     return Path(args.board)
 
 
-def load(path):
+def research_path(board_file, idea_id):
+    return Path(board_file).parent / "ideas" / f"{idea_id}.md"
+
+
+class BoardError(Exception):
+    pass
+
+
+def read_board(path):
     if not path.exists():
-        sys.exit(f"{path} not found. Run: lab.py init")
+        raise BoardError(f"{path} not found. Run: lab.py init")
     board = json.loads(path.read_text(encoding="utf-8"))
     board.setdefault("settings", {})
     for key, value in DEFAULT_SETTINGS.items():
         board["settings"].setdefault(key, value)
     board.setdefault("ideas", [])
+    board.setdefault("rev", 0)
     return board
 
 
+def load(path):
+    try:
+        return read_board(path)
+    except BoardError as exc:
+        sys.exit(str(exc))
+
+
 def save(path, board):
-    """Write atomically so the dashboard and CLI never see a half-written file."""
+    """Write atomically and bump rev so a stale dashboard can't overwrite newer changes."""
     validate(board)
+    board["rev"] = int(board.get("rev", 0)) + 1
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".board-", suffix=".json")
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -79,6 +113,10 @@ def save(path, board):
 def validate(board):
     if not isinstance(board.get("ideas"), list):
         raise ValueError("board.ideas must be a list")
+    settings = board.get("settings", {})
+    for key in NUMERIC_SETTINGS:
+        if key in settings and not isinstance(settings[key], (int, float)):
+            raise ValueError(f"settings.{key} must be a number")
     ids = set()
     for idea in board["ideas"]:
         if idea.get("stage") not in STAGES:
@@ -86,6 +124,10 @@ def validate(board):
         if not idea.get("id") or idea["id"] in ids:
             raise ValueError(f"missing or duplicate idea id {idea.get('id')!r}")
         ids.add(idea["id"])
+        for field in ("scores", "prelim"):
+            for key, value in (idea.get(field) or {}).items():
+                if not isinstance(value, (int, float)) or not 1 <= value <= 5:
+                    raise ValueError(f"idea {idea['id']}: {field}.{key} must be 1-5")
 
 
 def find(board, idea_id):
@@ -98,6 +140,10 @@ def find(board, idea_id):
 def next_id(board):
     nums = [int(i["id"][1:]) for i in board["ideas"] if i["id"][1:].isdigit()]
     return f"i{max(nums, default=0) + 1:03d}"
+
+
+def count_active(board):
+    return sum(1 for i in board["ideas"] if i["stage"] in ACTIVE)
 
 
 def log(idea, from_stage, to_stage, verdict, reason):
@@ -123,12 +169,20 @@ def judge_fdt(fdt, settings):
     return "drop", f"가입률 {rate:.1%} < {settings['fdt_retry_rate']:.0%} → 수요 약함, Drop 권장"
 
 
+def funnel_line(board):
+    ideas = board["ideas"]
+    n = {st: sum(1 for i in ideas if i["stage"] == st) for st in STAGES}
+    flow = " → ".join(f"{SHORT_LABELS[st]} {n[st]}" for st in STAGES[:6])
+    return f"{flow} · Drop {n['dropped']} · 병렬 {count_active(board)}/{board['settings']['max_parallel']}"
+
+
 def cmd_init(args):
     path = board_path(args)
     if path.exists():
         print(f"{path} already exists")
         return 0
-    save(path, {"version": 1, "settings": dict(DEFAULT_SETTINGS), "ideas": []})
+    save(path, {"version": 1, "rev": 0, "settings": dict(DEFAULT_SETTINGS), "ideas": []})
+    (path.parent / "ideas").mkdir(exist_ok=True)
     print(f"created {path}")
     return 0
 
@@ -136,6 +190,8 @@ def cmd_init(args):
 def cmd_add(args):
     path = board_path(args)
     board = load(path)
+    if args.parent:
+        find(board, args.parent)
     idea = {
         "id": next_id(board),
         "title": args.title,
@@ -144,8 +200,10 @@ def cmd_add(args):
         "stage": "ideation",
         "priority": None,
         "scores": {},
+        "prelim": {},
         "fdt": None,
         "notes": args.notes or "",
+        "parent": args.parent,
         "log": [],
         "created_at": now(),
         "updated_at": now(),
@@ -153,12 +211,14 @@ def cmd_add(args):
     }
     board["ideas"].append(idea)
     save(path, board)
-    print(f"added {idea['id']}  {idea['title']}")
+    origin = f"  (← {args.parent} 피벗)" if args.parent else ""
+    print(f"added {idea['id']}  {idea['title']}{origin}")
     return 0
 
 
 def cmd_list(args):
-    board = load(board_path(args))
+    path = board_path(args)
+    board = load(path)
     stages = [args.stage] if args.stage else STAGES
     for stage in stages:
         ideas = [i for i in board["ideas"] if i["stage"] == stage]
@@ -168,16 +228,30 @@ def cmd_list(args):
         print(f"\n## {STAGE_LABELS[stage]} ({len(ideas)})")
         for i in ideas:
             pri = f"P{i['priority']}" if i.get("priority") else "  -"
-            extra = f"  FDT:{i['fdt']['verdict']}" if i.get("fdt") else ""
+            sc = " ".join(f"{k}{i['scores'][k]:g}" for k in SCORE_KEYS if k in i.get("scores", {}))
+            extra = f"  [{sc}]" if sc else ""
+            if i.get("fdt"):
+                extra += f"  FDT:{i['fdt']['verdict']}"
+            if research_path(path, i["id"]).exists():
+                extra += "  조사✓"
+            if i.get("parent"):
+                extra += f"  ←{i['parent']}"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
-    active = sum(1 for i in board["ideas"] if i["stage"] in ("filtering", "review"))
-    print(f"\n병렬 실험 중: {active}/{board['settings']['max_parallel']}")
+    print(f"\n{funnel_line(board)}")
+    return 0
+
+
+def cmd_status(args):
+    print(funnel_line(load(board_path(args))))
     return 0
 
 
 def cmd_show(args):
-    board = load(board_path(args))
-    print(json.dumps(find(board, args.id), ensure_ascii=False, indent=2))
+    path = board_path(args)
+    idea = find(load(path), args.id)
+    print(json.dumps(idea, ensure_ascii=False, indent=2))
+    rp = research_path(path, args.id)
+    print(f"\nresearch: {rp}" + ("" if rp.exists() else " (없음)"))
     return 0
 
 
@@ -185,10 +259,14 @@ def cmd_move(args):
     path = board_path(args)
     board = load(path)
     idea = find(board, args.id)
-    if args.stage in ("filtering", "review") and idea["stage"] not in ("filtering", "review"):
-        active = sum(1 for i in board["ideas"] if i["stage"] in ("filtering", "review"))
+    if args.stage in ACTIVE and idea["stage"] not in ACTIVE:
+        active = count_active(board)
         if active >= board["settings"]["max_parallel"] and not args.force:
             sys.exit(f"병렬 실험이 이미 {active}개입니다(최대 {board['settings']['max_parallel']}). --force로 무시")
+    if args.stage == "filtering" and idea["stage"] != "filtering":
+        missing = [k for k in ("need", "revenue") if k not in idea.get("scores", {})]
+        if missing and not args.force:
+            sys.exit(f"3단계 점수({', '.join(missing)})가 없습니다. LAB score 먼저, 또는 --force")
     from_stage = idea["stage"]
     idea["stage"] = args.stage
     if args.priority is not None:
@@ -198,7 +276,9 @@ def cmd_move(args):
         idea["next_review"] = (dt.date.today() + dt.timedelta(days=days)).isoformat()
     elif args.stage in ("done", "dropped"):
         idea["next_review"] = None
-    log(idea, from_stage, args.stage, args.verdict, args.reason or "")
+        if args.stage == "dropped":
+            idea["priority"] = None
+    log(idea, from_stage, args.stage, args.verdict, args.reason)
     save(path, board)
     print(f"{idea['id']}: {STAGE_LABELS[from_stage]} → {STAGE_LABELS[args.stage]}")
     return 0
@@ -208,17 +288,50 @@ def cmd_score(args):
     path = board_path(args)
     board = load(path)
     idea = find(board, args.id)
+    field = "prelim" if args.prelim else "scores"
+    target = idea.setdefault(field, {})
     for pair in args.pairs:
         key, _, value = pair.partition("=")
         if not value:
             sys.exit(f"expected key=value, got {pair!r}")
+        if key not in SCORE_KEYS:
+            sys.exit(f"unknown score key {key!r}. use: {', '.join(SCORE_KEYS)}")
         score = float(value)
         if not 1 <= score <= 5:
             sys.exit(f"{key}: score must be 1-5")
-        idea.setdefault("scores", {})[key] = score
+        target[key] = score
     idea["updated_at"] = now()
     save(path, board)
-    print(json.dumps(idea["scores"], ensure_ascii=False))
+    print(f"{field}: {json.dumps(target, ensure_ascii=False)}")
+    s = idea.get("scores", {})
+    if not args.prelim and (s.get("need", 5) <= 2 or s.get("revenue", 5) <= 2):
+        print("⚠ need 또는 revenue ≤ 2 → 3단계 자동 Drop 대상")
+    return 0
+
+
+def cmd_note(args):
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    text = Path(args.file).read_text(encoding="utf-8") if args.file else args.text
+    idea["notes"] = text.strip()
+    idea["updated_at"] = now()
+    save(path, board)
+    print(f"{idea['id']}: 메모 {len(idea['notes'])}자 저장")
+    return 0
+
+
+def cmd_edit(args):
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    changes = {k: v for k, v in (("title", args.title), ("p_code", args.p), ("s_code", args.s)) if v}
+    if not changes:
+        sys.exit("바꿀 항목(--title/--p/--s)이 없습니다")
+    idea.update(changes)
+    log(idea, idea["stage"], idea["stage"], None, f"{', '.join(changes)} 수정: {args.reason}")
+    save(path, board)
+    print(f"{idea['id']}: {', '.join(changes)} 수정")
     return 0
 
 
@@ -228,6 +341,10 @@ def cmd_fdt(args):
     idea = find(board, args.id)
     if args.visits <= 0:
         sys.exit("visits must be > 0")
+    if min(args.clicks, args.signups, args.paid) < 0:
+        sys.exit("counts must be >= 0")
+    if args.signups > args.visits:
+        sys.exit("signups가 visits보다 많을 수 없습니다")
     fdt = {
         "visits": args.visits,
         "clicks": args.clicks,
@@ -258,31 +375,64 @@ def cmd_due(args):
     return 0
 
 
-class Handler(SimpleHTTPRequestHandler):
-    board_file = None
+def cmd_set(args):
+    path = board_path(args)
+    board = load(path)
+    for pair in args.pairs:
+        key, _, value = pair.partition("=")
+        if key not in DEFAULT_SETTINGS:
+            sys.exit(f"unknown setting {key!r}. use: {', '.join(DEFAULT_SETTINGS)}")
+        if key in NUMERIC_SETTINGS:
+            num = float(value)
+            board["settings"][key] = int(num) if num.is_integer() and isinstance(DEFAULT_SETTINGS[key], int) else num
+        else:
+            board["settings"][key] = value
+    save(path, board)
+    print(json.dumps(board["settings"], ensure_ascii=False))
+    return 0
 
-    def __init__(self, *a, **kw):
-        super().__init__(*a, directory=str(SCRIPT_DIR), **kw)
+
+class Handler(BaseHTTPRequestHandler):
+    board_file = None
 
     def log_message(self, fmt, *args):
         pass
 
-    def _json(self, code, payload):
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    def _send(self, code, body, ctype):
         self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
+    def _json(self, code, payload):
+        self._send(code, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+    def _board(self):
+        board = read_board(self.board_file)
+        board["stage_labels"] = STAGE_LABELS
+        board["has_research"] = [
+            i["id"] for i in board["ideas"] if research_path(self.board_file, i["id"]).exists()
+        ]
+        return board
+
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
-            self.path = "/dashboard.html"
-        if self.path == "/api/board":
-            board = load(self.board_file)
-            board["stage_labels"] = STAGE_LABELS
-            return self._json(200, board)
-        return super().do_GET()
+        path = self.path.split("?")[0]
+        try:
+            if path in ("/", "/index.html", "/dashboard.html"):
+                return self._send(200, (SCRIPT_DIR / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
+            if path == "/api/board":
+                return self._json(200, self._board())
+            if path.startswith("/api/research/"):
+                idea_id = path.rsplit("/", 1)[-1]
+                rp = research_path(self.board_file, idea_id)
+                if not ID_RE.match(idea_id) or not rp.exists():
+                    return self._json(404, {"error": "no research"})
+                return self._json(200, {"id": idea_id, "markdown": rp.read_text(encoding="utf-8")})
+        except (BoardError, ValueError, OSError) as exc:
+            return self._json(500, {"error": str(exc)})
+        return self._json(404, {"error": "not found"})
 
     def do_POST(self):
         if self.path != "/api/board":
@@ -290,27 +440,44 @@ class Handler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         try:
             board = json.loads(self.rfile.read(length))
+            current = read_board(self.board_file)
+            if int(board.get("rev", -1)) != int(current.get("rev", 0)):
+                return self._json(409, {"error": "보드가 다른 곳(Claude/CLI)에서 바뀌었습니다. 새로 불러옵니다.",
+                                        "board": self._board()})
             board.pop("stage_labels", None)
+            board.pop("has_research", None)
+            settings = {**DEFAULT_SETTINGS, **board.get("settings", {})}
             for idea in board.get("ideas", []):
                 if idea.get("fdt") and idea["fdt"].get("visits"):
-                    idea["fdt"]["verdict"], idea["fdt"]["message"] = judge_fdt(
-                        idea["fdt"], {**DEFAULT_SETTINGS, **board.get("settings", {})}
-                    )
+                    idea["fdt"]["verdict"], idea["fdt"]["message"] = judge_fdt(idea["fdt"], settings)
             save(self.board_file, board)
-        except (ValueError, KeyError, TypeError) as exc:
+        except (ValueError, KeyError, TypeError, BoardError) as exc:
             return self._json(400, {"error": str(exc)})
-        board["stage_labels"] = STAGE_LABELS
-        return self._json(200, board)
+        return self._json(200, self._board())
+
+
+class LabServer(ThreadingHTTPServer):
+    # Windows에서 SO_REUSEADDR는 이미 쓰는 포트를 조용히 같이 잡아버리므로 끈다
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self):
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def cmd_serve(args):
     path = board_path(args).resolve()
     if not path.exists():
-        save(path, {"version": 1, "settings": dict(DEFAULT_SETTINGS), "ideas": []})
+        save(path, {"version": 1, "rev": 0, "settings": dict(DEFAULT_SETTINGS), "ideas": []})
     Handler.board_file = path
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    try:
+        server = LabServer(("127.0.0.1", args.port), Handler)
+    except OSError:
+        sys.exit(f"포트 {args.port}가 이미 사용 중입니다. 대시보드가 이미 떠 있으면 http://127.0.0.1:{args.port}/ 를 여세요. "
+                 f"다른 포트: serve --port {args.port + 1}")
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"dashboard: {url}  (board: {path})  Ctrl+C to stop")
+    print(f"dashboard: {url}  (board: {path})  Ctrl+C to stop", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
     try:
@@ -336,11 +503,14 @@ def main():
     p.add_argument("--p", help="P-Code: who has which problem")
     p.add_argument("--s", help="S-Code: solution and business model")
     p.add_argument("--notes")
+    p.add_argument("--from", dest="parent", help="id of the idea this one pivots from")
     p.set_defaults(func=cmd_add)
 
     p = sub.add_parser("list")
     p.add_argument("--stage", choices=STAGES)
     p.set_defaults(func=cmd_list)
+
+    sub.add_parser("status").set_defaults(func=cmd_status)
 
     p = sub.add_parser("show")
     p.add_argument("id")
@@ -350,15 +520,31 @@ def main():
     p.add_argument("id")
     p.add_argument("stage", choices=STAGES)
     p.add_argument("--verdict", choices=VERDICTS)
-    p.add_argument("--reason")
+    p.add_argument("--reason", required=True, help="why (evidence, one line)")
     p.add_argument("--priority", type=int)
-    p.add_argument("--force", action="store_true", help="ignore the parallel experiment limit")
+    p.add_argument("--force", action="store_true", help="ignore the parallel limit / missing scores")
     p.set_defaults(func=cmd_move)
 
     p = sub.add_parser("score")
     p.add_argument("id")
     p.add_argument("pairs", nargs="+", metavar="key=value")
+    p.add_argument("--prelim", action="store_true", help="provisional scores (e.g. easy/moat/scale before stage 5)")
     p.set_defaults(func=cmd_score)
+
+    p = sub.add_parser("note")
+    p.add_argument("id")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--text")
+    g.add_argument("--file")
+    p.set_defaults(func=cmd_note)
+
+    p = sub.add_parser("edit")
+    p.add_argument("id")
+    p.add_argument("--title")
+    p.add_argument("--p")
+    p.add_argument("--s")
+    p.add_argument("--reason", required=True)
+    p.set_defaults(func=cmd_edit)
 
     p = sub.add_parser("fdt")
     p.add_argument("id")
@@ -370,6 +556,10 @@ def main():
     p.set_defaults(func=cmd_fdt)
 
     sub.add_parser("due").set_defaults(func=cmd_due)
+
+    p = sub.add_parser("set")
+    p.add_argument("pairs", nargs="+", metavar="key=value")
+    p.set_defaults(func=cmd_set)
 
     p = sub.add_parser("serve")
     p.add_argument("--port", type=int, default=8765)

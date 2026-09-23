@@ -128,6 +128,17 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .verdict { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .log { font-size: 12px; color: var(--muted); display: grid; gap: 4px; max-height: 140px; overflow: auto; }
+.prelim { font-size: 11px; color: var(--muted); margin-left: auto; }
+.md { font-size: 13px; line-height: 1.6; max-height: 360px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; }
+.md h1, .md h2, .md h3 { font-size: 14px; margin: 12px 0 4px; }
+.md h1:first-child, .md h2:first-child { margin-top: 0; }
+.md p, .md ul { margin: 4px 0; }
+.md ul { padding-left: 18px; }
+.md a { color: var(--accent); }
+.md .tw { overflow-x: auto; margin: 6px 0; }
+.md table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+.md th { background: var(--surface-2); }
 .foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 600px) {
   header, .funnel, .meta, .board { padding-left: 16px; padding-right: 16px; }
@@ -167,10 +178,15 @@ const SCORE_KEYS = [
 ];
 let board = null;
 let labels = {};
+let research = new Set();
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => new Date().toISOString().slice(0, 10);
+const pad = (n) => String(n).padStart(2, "0");
+const localDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const localNow = () => { const d = new Date(); return `${localDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const today = () => localDate(new Date());
+const plusDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return localDate(d); };
 
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
@@ -183,7 +199,8 @@ async function load() {
     if (!res.ok) throw new Error(res.status);
     const data = await res.json();
     labels = data.stage_labels || {};
-    board = data;
+    board = data; research = new Set(data.has_research || []);
+    $("banner").style.display = "none";
     render();
   } catch (e) {
     const b = $("banner");
@@ -197,8 +214,12 @@ async function save(msg) {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(board),
   });
   const data = await res.json();
-  if (!res.ok) { toast("저장 실패: " + (data.error || res.status)); return false; }
-  board = data; labels = data.stage_labels || labels;
+  if (res.status === 409) {
+    board = data.board; research = new Set(board.has_research || []);
+    render(); toast(data.error); return false;
+  }
+  if (!res.ok) { toast("저장 실패: " + (data.error || res.status)); await load(); return false; }
+  board = data; labels = data.stage_labels || labels; research = new Set(data.has_research || []);
   render(); if (msg) toast(msg);
   return true;
 }
@@ -259,6 +280,10 @@ function render() {
 function cardHtml(i) {
   const chips = [];
   if (i.priority) chips.push(`<span class="chip pri">P${i.priority}</span>`);
+  const sc = ["need", "revenue", "tenx"].map((k) => i.scores?.[k]).filter((v) => v != null);
+  if (sc.length) chips.push(`<span class="chip">평균 ${(sc.reduce((a, b) => a + b, 0) / sc.length).toFixed(1)}</span>`);
+  if (research.has(i.id)) chips.push(`<span class="chip go">조사✓</span>`);
+  if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
   if (i.fdt && i.fdt.verdict) {
     const rate = i.fdt.visits ? ((i.fdt.signups / i.fdt.visits) * 100).toFixed(1) + "%" : "";
     chips.push(`<span class="chip ${i.fdt.verdict}">FDT ${esc(i.fdt.verdict)} ${rate}</span>`);
@@ -287,12 +312,12 @@ function moveIdea(id, stage, verdict, reason) {
   const from = idea.stage;
   idea.stage = stage;
   if (stage === "review") {
-    const d = new Date(); d.setDate(d.getDate() + s.review_every_days);
-    idea.next_review = d.toISOString().slice(0, 10);
+    idea.next_review = plusDays(s.review_every_days);
   } else if (stage === "done" || stage === "dropped") {
     idea.next_review = null;
+    if (stage === "dropped") idea.priority = null;
   }
-  const now = new Date().toISOString().slice(0, 19);
+  const now = localNow();
   (idea.log = idea.log || []).push({ at: now, from, to: stage, verdict, reason: reason || "" });
   idea.updated_at = now;
   save(`${idea.title} → ${labels[stage] || stage}`);
@@ -301,27 +326,28 @@ function moveIdea(id, stage, verdict, reason) {
 function openIdea(id) {
   const isNew = !id;
   const idea = isNew
-    ? { id: "", title: "", p_code: "", s_code: "", notes: "", scores: {}, fdt: null, stage: "ideation", log: [] }
+    ? { id: "", title: "", p_code: "", s_code: "", notes: "", scores: {}, prelim: {}, fdt: null, stage: "ideation", log: [] }
     : board.ideas.find((i) => i.id === id);
   const f = idea.fdt || {};
   const q = QUESTION[idea.stage];
   const form = $("form");
   form.innerHTML = `
-    <h3>${isNew ? "새 아이디어" : esc(idea.id) + " · " + esc(labels[idea.stage] || idea.stage)}</h3>
+    <h3>${isNew ? "새 아이디어" : esc(idea.id) + " · " + esc(labels[idea.stage] || idea.stage)}${idea.parent ? ` <span class="hint">← ${esc(idea.parent)} 피벗</span>` : ""}</h3>
     <div class="row"><label>제목</label><input name="title" required value="${esc(idea.title)}"></div>
     <div class="row"><label>P-Code · 누가, 어떤 상황에서, 어떤 문제를 겪나</label><textarea name="p_code">${esc(idea.p_code)}</textarea></div>
     <div class="row"><label>S-Code · 해결책과 수익 모델</label><textarea name="s_code">${esc(idea.s_code)}</textarea></div>
     ${isNew ? "" : `
+    ${research.has(idea.id) ? `<div class="section"><h4>조사 (lab/ideas/${esc(idea.id)}.md)</h4><div class="md" id="research">불러오는 중…</div></div>` : ""}
     <div class="grid2">
       <div class="row"><label>우선순위</label><input name="priority" type="number" min="1" value="${idea.priority ?? ""}"></div>
     </div>
     <div class="section">
       <h4>점수 (1~5)</h4>
       <div class="scores">${SCORE_KEYS.map(([k, l]) => `
-        <div class="score"><span>${l}</span><select name="score_${k}">
+        <div class="score"><span>${l}</span>${idea.prelim?.[k] != null ? `<span class="prelim">가안 ${idea.prelim[k]}</span>` : ""}<select name="score_${k}">
           <option value="">-</option>${[1, 2, 3, 4, 5].map((n) => `<option ${idea.scores?.[k] == n ? "selected" : ""}>${n}</option>`).join("")}
         </select></div>`).join("")}</div>
-      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다.</div>
+      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다. '가안'은 조사 때 미리 매긴 점수이고, 따라 하기 어려움·해자·확장성은 5단계에서 확정합니다.</div>
     </div>
     <div class="section">
       <h4>FDT (가짜 문 테스트)</h4>
@@ -369,11 +395,11 @@ function openIdea(id) {
     if (isNew) {
       if (!val("title")) return;
       const nums = board.ideas.map((i) => parseInt(i.id.slice(1), 10)).filter((n) => !isNaN(n));
-      const now = new Date().toISOString().slice(0, 19);
+      const now = localNow();
       board.ideas.push({
         id: "i" + String(Math.max(0, ...nums) + 1).padStart(3, "0"),
         title: val("title"), p_code: val("p_code"), s_code: val("s_code"),
-        stage: "ideation", priority: null, scores: {}, fdt: null, notes: "", log: [],
+        stage: "ideation", priority: null, scores: {}, prelim: {}, fdt: null, notes: "", parent: null, log: [],
         created_at: now, updated_at: now, next_review: null,
       });
       save("추가했습니다");
@@ -390,7 +416,7 @@ function openIdea(id) {
       idea.fdt = {
         visits: Number(val("visits")), clicks: Number(val("clicks") || 0),
         signups: Number(val("signups") || 0), paid: Number(val("paid") || 0),
-        url: val("url"), updated_at: new Date().toISOString().slice(0, 19),
+        url: val("url"), updated_at: localNow(),
       };
     }
     const reason = val("reason");
@@ -398,17 +424,73 @@ function openIdea(id) {
     if (action === "drop") return moveIdea(idea.id, "dropped", "drop", reason);
     if (action === "revive") return moveIdea(idea.id, "ideation", "retry", reason);
     if (action === "retry") {
-      const now = new Date().toISOString().slice(0, 19);
-      (idea.log = idea.log || []).push({ at: now, from: idea.stage, to: idea.stage, verdict: "retry", reason });
-      if (idea.stage === "review") {
-        const d = new Date(); d.setDate(d.getDate() + board.settings.review_every_days);
-        idea.next_review = d.toISOString().slice(0, 10);
-      }
+      (idea.log = idea.log || []).push({ at: localNow(), from: idea.stage, to: idea.stage, verdict: "retry", reason });
+      if (idea.stage === "review") idea.next_review = plusDays(board.settings.review_every_days);
     }
     save("저장했습니다");
   };
   $("dlg").showModal();
+  if (!isNew && research.has(idea.id)) loadResearch(idea.id);
 }
+
+async function loadResearch(id) {
+  const el = $("research");
+  try {
+    const res = await fetch("/api/research/" + encodeURIComponent(id));
+    const data = await res.json();
+    if (el) el.innerHTML = res.ok ? mdToHtml(data.markdown) : esc(data.error);
+  } catch (e) { if (el) el.textContent = "조사 파일을 불러오지 못했습니다."; }
+}
+
+// 조사 파일용 최소 마크다운 렌더러: 제목, 표, 목록, 굵게, 링크
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)"]+[^\s<)".,])/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+}
+
+function mdToHtml(md) {
+  const out = [];
+  const lines = md.split(/\r?\n/);
+  const isList = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const h = line.match(/^(#{1,3})\s+(.*)/);
+    if (h) { out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if (line.trim().startsWith("|")) {
+      const rows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) rows.push(lines[i++]);
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const [head, ...rest] = rows.filter((r) => !/^\s*\|?\s*:?-{2,}/.test(r));
+      if (!head) continue;
+      out.push(`<div class="tw"><table><tr>${cells(head).map((c) => `<th>${inline(c)}</th>`).join("")}</tr>${
+        rest.map((r) => `<tr>${cells(r).map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</table></div>`);
+      continue;
+    }
+    if (isList(line)) {
+      const items = [];
+      while (i < lines.length && isList(lines[i])) items.push(lines[i++].replace(/^\s*([-*]|\d+\.)\s+/, ""));
+      out.push(`<ul>${items.map((t) => `<li>${inline(t)}</li>`).join("")}</ul>`);
+      continue;
+    }
+    if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+    i++;
+  }
+  return out.join("");
+}
+
+// Claude·CLI가 보드를 바꾸면 자동으로 다시 불러온다(편집 창이 닫혀 있을 때만)
+setInterval(async () => {
+  if ($("dlg").open || !board) return;
+  try {
+    const res = await fetch("/api/board");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.rev !== board.rev) { board = data; research = new Set(data.has_research || []); render(); }
+  } catch (e) { /* 서버가 꺼져 있으면 다음 주기에 다시 시도 */ }
+}, 5000);
 
 $("addBtn").addEventListener("click", () => openIdea(null));
 load();
