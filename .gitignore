@@ -7,3 +7,4 @@ reels/**/*.m4a
 reels/**/frames/
 reels/**/media_urls.txt
 dist/
+lab/fdt/**/node_modules/

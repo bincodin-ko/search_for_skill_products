@@ -7,7 +7,15 @@
 
 ## 스킬 설치 (Windows)
 
-이 저장소에는 직접 만든 스킬 2개가 있습니다: `reel-analyzer`(릴스 자동 분석), `idea-blueprint`(아이디어 설계도).
+이 저장소에는 직접 만든 스킬 3개가 있습니다.
+
+| 스킬 | 하는 일 | 이렇게 말하면 실행 |
+|---|---|---|
+| `reel-analyzer` | 인스타 릴스 캡션·대본·화면 글자 수집 후 분석 | `릴스 분석해 <링크>` |
+| `idea-lab` | **될 놈 실험실**: 아이디어 여러 개를 5단계 깔때기(FDT 포함)로 동시에 거르고 칸반 대시보드로 관리 | `실험실에 아이디어 넣어줘: ...`, `실험실 리뷰해줘`, `실험실 대시보드 열어줘` |
+| `idea-blueprint` | 통과한 아이디어 1개를 설계도(유저 플로우·출시 범위·인지도 전략)로 | `이 아이디어 블루프린트 만들어줘: ...` |
+
+흐름: `idea-lab`으로 많이 거르고 → DONE 1순위를 `idea-blueprint`로 설계. 실험실 구조의 원본은 [릴스 흐름도 복원](reels/Ddi6CRfTQBY/funnel-structure.md)에 있습니다.
 
 **PC에 설치 (어느 폴더에서든 사용)** — 저장소 폴더에서 PowerShell:
 ```powershell
@@ -17,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File .\install-skills.ps1
 - `%USERPROFILE%\.claude\skills\`에 복사됩니다. 터미널 `claude`와 데스크톱 앱의 **Local** 세션이 여기서 스킬을 읽습니다.
 - 스킬을 고친 뒤 다시 실행하면 업데이트됩니다(이미 설치된 Python 환경은 유지).
 
-**Claude 앱(채팅)에 올리기** — `idea-blueprint`만 해당:
+**Claude 앱(채팅)에 올리기** — `idea-blueprint`만 해당(`idea-lab`은 로컬 대시보드 서버가 필요해서 PC 전용):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-skills.ps1 -Zip
 ```

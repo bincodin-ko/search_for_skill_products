@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>될 놈 실험실</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root {
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #efeee9;
+  --line: #dedcd4;
+  --text: #1d1c1a;
+  --muted: #6b6860;
+  --accent: #6d3fd9;
+  --accent-soft: #ece5fb;
+  --on-accent: #ffffff;
+  --go: #1f7a4d;
+  --go-soft: #e1f2e8;
+  --retry: #9a6400;
+  --retry-soft: #fbf0d9;
+  --drop: #b43c2e;
+  --drop-soft: #fbe5e1;
+  --hold: #52606d;
+  --hold-soft: #e7ebee;
+  --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151412;
+    --surface: #1f1e1b;
+    --surface-2: #2a2925;
+    --line: #3a3833;
+    --text: #efede7;
+    --muted: #a19d93;
+    --accent: #a98bf5;
+    --accent-soft: #2e2548;
+    --on-accent: #151412;
+    --go: #6fcf9b;
+    --go-soft: #1c3327;
+    --retry: #e6b457;
+    --retry-soft: #3a2f18;
+    --drop: #f08b7d;
+    --drop-soft: #3d201c;
+    --hold: #a9b6c2;
+    --hold-soft: #262c31;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Pretendard", -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+header { padding: 20px 20px 8px; display: flex; flex-wrap: wrap; align-items: end; gap: 12px 24px; }
+h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+.sub { color: var(--muted); font-size: 13px; }
+.spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+  padding: 7px 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.go { background: var(--go-soft); border-color: transparent; color: var(--go); }
+.btn.drop { background: var(--drop-soft); border-color: transparent; color: var(--drop); }
+.btn.hold { background: var(--hold-soft); border-color: transparent; color: var(--hold); }
+
+.funnel { display: flex; gap: 4px; padding: 8px 20px 16px; overflow-x: auto; }
+.fstep {
+  flex: 1 0 96px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; position: relative; overflow: hidden;
+}
+.fstep .n { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fstep .l { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fstep .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); }
+.fstep.done .bar { background: var(--go); }
+.fstep.dropped .bar { background: var(--drop); }
+.meta { display: flex; gap: 16px; padding: 0 20px 12px; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+.meta b { color: var(--text); }
+
+.board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(180px, 1fr); gap: 12px; padding: 0 20px 24px; overflow-x: auto; }
+.col { background: var(--surface-2); border-radius: 10px; padding: 10px; min-height: 240px; display: flex; flex-direction: column; gap: 8px; }
+.col.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.col h2 { font-size: 13px; margin: 2px 4px 4px; display: flex; justify-content: space-between; }
+.col h2 span { color: var(--muted); font-weight: 500; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  cursor: pointer; box-shadow: var(--shadow);
+}
+.card:hover { border-color: var(--accent); }
+.card .t { font-weight: 600; margin: 2px 0 4px; }
+.card .id { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card .ps { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font-size: 11px; border-radius: 99px; padding: 1px 8px; background: var(--surface-2); color: var(--muted); }
+.chip.go { background: var(--go-soft); color: var(--go); }
+.chip.retry { background: var(--retry-soft); color: var(--retry); }
+.chip.drop { background: var(--drop-soft); color: var(--drop); }
+.chip.hold { background: var(--hold-soft); color: var(--hold); }
+.chip.pri { background: var(--accent-soft); color: var(--accent); }
+.chip.due { background: var(--retry-soft); color: var(--retry); }
+.empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 4px; }
+
+.banner { margin: 0 20px 12px; padding: 10px 14px; border-radius: 8px; background: var(--drop-soft); color: var(--drop); display: none; }
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+
+dialog { border: none; border-radius: 12px; padding: 0; width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 32px); background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+.dlg { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.dlg h3 { margin: 0; font-size: 18px; }
+.row { display: grid; gap: 4px; }
+.row label { font-size: 12px; color: var(--muted); }
+.row input, .row textarea, .row select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }
+.row textarea { min-height: 64px; resize: vertical; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.section { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 10px; }
+.section h4 { margin: 0; font-size: 13px; }
+.hint { font-size: 12px; color: var(--muted); }
+.scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.score { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.score span { font-size: 12px; }
+.score select { width: 64px; border: 1px solid var(--line); border-radius: 6px; padding: 4px; background: var(--bg); }
+.verdict { padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.log { font-size: 12px; color: var(--muted); display: grid; gap: 4px; max-height: 140px; overflow: auto; }
+.foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 600px) {
+  header, .funnel, .meta, .board { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>될 놈 실험실</h1>
+    <div class="sub">Ideation → Incubating → Brainstorming → Filtering(FDT) → 2일마다 리뷰 → DONE</div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn primary" id="addBtn">+ 아이디어</button>
+</header>
+<div class="banner" id="banner"></div>
+<div class="funnel" id="funnel"></div>
+<div class="meta" id="meta"></div>
+<main class="board" id="board"></main>
+
+<dialog id="dlg"><form method="dialog" class="dlg" id="form"></form></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const STAGES = ["ideation", "incubating", "brainstorming", "filtering", "review", "done", "dropped"];
+const NEXT = { ideation: "incubating", incubating: "brainstorming", brainstorming: "filtering", filtering: "review", review: "done" };
+const QUESTION = {
+  ideation: "P-Code와 S-Code를 적었나?",
+  incubating: "P-Code와 S-Code가 한 문장씩 명확한가?",
+  brainstorming: "필요성·수익성 2점 초과이고, 실험할 우선순위 안에 드는가?",
+  filtering: "유의미한 니즈가 확인됐는가? (FDT)",
+  review: "독점 가능성과 확장 가능성이 있는가?",
+};
+const SCORE_KEYS = [
+  ["need", "필요성"], ["revenue", "수익성"], ["tenx", "10배 요소"],
+  ["easy", "따라 하기 어려움"], ["moat", "해자"], ["scale", "확장성"],
+];
+let board = null;
+let labels = {};
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const today = () => new Date().toISOString().slice(0, 10);
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+async function load() {
+  try {
+    const res = await fetch("/api/board");
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    labels = data.stage_labels || {};
+    board = data;
+    render();
+  } catch (e) {
+    const b = $("banner");
+    b.style.display = "block";
+    b.textContent = "보드를 불러오지 못했습니다. 터미널에서 lab.py serve 로 열어주세요.";
+  }
+}
+
+async function save(msg) {
+  const res = await fetch("/api/board", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(board),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast("저장 실패: " + (data.error || res.status)); return false; }
+  board = data; labels = data.stage_labels || labels;
+  render(); if (msg) toast(msg);
+  return true;
+}
+
+function judge(fdt, s) {
+  if (!fdt || !fdt.visits) return null;
+  if (fdt.visits < s.fdt_min_visits) return ["hold", `표본 부족: 방문 ${fdt.visits}명 < ${s.fdt_min_visits}명`];
+  const rate = fdt.signups / fdt.visits;
+  const pct = (rate * 100).toFixed(1) + "%";
+  if (rate >= s.fdt_go_rate) return ["go", `가입률 ${pct} → 통과`];
+  if (rate >= s.fdt_retry_rate) return ["retry", `가입률 ${pct} → 문구·가격 바꿔 재실험`];
+  if (fdt.paid) return ["retry", `가입률 ${pct}, 선결제 ${fdt.paid}건 → 타깃 좁혀 재실험`];
+  return ["drop", `가입률 ${pct} → 수요 약함`];
+}
+
+function render() {
+  const ideas = board.ideas;
+  const count = (st) => ideas.filter((i) => i.stage === st).length;
+  const max = Math.max(1, ...STAGES.map(count));
+  $("funnel").innerHTML = STAGES.map((st) => `
+    <div class="fstep ${st}">
+      <div class="n">${count(st)}</div>
+      <div class="l">${esc(labels[st] || st)}</div>
+      <div class="bar" style="width:${(count(st) / max) * 100}%"></div>
+    </div>`).join("");
+
+  const active = count("filtering") + count("review");
+  const due = ideas.filter((i) => i.stage === "review" && (!i.next_review || i.next_review <= today())).length;
+  const s = board.settings;
+  $("meta").innerHTML = `
+    <span>병렬 실험 <b>${active}/${s.max_parallel}</b></span>
+    <span>오늘 리뷰 <b>${due}</b></span>
+    <span>FDT 기준: 방문 ${s.fdt_min_visits}명 이상 · 가입률 ${(s.fdt_go_rate * 100).toFixed(0)}% 통과 · ${(s.fdt_retry_rate * 100).toFixed(0)}% 미만 Drop</span>`;
+
+  $("board").innerHTML = STAGES.map((st) => {
+    const list = ideas.filter((i) => i.stage === st)
+      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    return `<section class="col" data-stage="${st}">
+      <h2>${esc(labels[st] || st)} <span>${list.length}</span></h2>
+      ${list.map(cardHtml).join("") || '<div class="empty">비어 있음</div>'}
+    </section>`;
+  }).join("");
+
+  document.querySelectorAll(".card").forEach((el) => {
+    el.addEventListener("click", () => openIdea(el.dataset.id));
+    el.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", el.dataset.id));
+  });
+  document.querySelectorAll(".col").forEach((col) => {
+    col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("over"); });
+    col.addEventListener("dragleave", () => col.classList.remove("over"));
+    col.addEventListener("drop", (e) => {
+      e.preventDefault(); col.classList.remove("over");
+      moveIdea(e.dataTransfer.getData("text/plain"), col.dataset.stage, null, "대시보드에서 이동");
+    });
+  });
+}
+
+function cardHtml(i) {
+  const chips = [];
+  if (i.priority) chips.push(`<span class="chip pri">P${i.priority}</span>`);
+  if (i.fdt && i.fdt.verdict) {
+    const rate = i.fdt.visits ? ((i.fdt.signups / i.fdt.visits) * 100).toFixed(1) + "%" : "";
+    chips.push(`<span class="chip ${i.fdt.verdict}">FDT ${esc(i.fdt.verdict)} ${rate}</span>`);
+  }
+  if (i.stage === "review" && i.next_review) {
+    const due = i.next_review <= today();
+    chips.push(`<span class="chip ${due ? "due" : ""}">리뷰 ${esc(i.next_review.slice(5))}</span>`);
+  }
+  const last = (i.log || []).slice(-1)[0];
+  if (i.stage === "dropped" && last && last.reason) chips.push(`<span class="chip drop">${esc(last.reason.slice(0, 24))}</span>`);
+  return `<article class="card" draggable="true" data-id="${esc(i.id)}">
+    <div class="id">${esc(i.id)}</div>
+    <div class="t">${esc(i.title)}</div>
+    <div class="ps">${esc(i.p_code)}${i.s_code ? " · " + esc(i.s_code) : ""}</div>
+    ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
+  </article>`;
+}
+
+function moveIdea(id, stage, verdict, reason) {
+  const idea = board.ideas.find((i) => i.id === id);
+  if (!idea || idea.stage === stage) return;
+  const s = board.settings;
+  const entering = ["filtering", "review"].includes(stage) && !["filtering", "review"].includes(idea.stage);
+  const active = board.ideas.filter((i) => ["filtering", "review"].includes(i.stage)).length;
+  if (entering && active >= s.max_parallel && !confirm(`병렬 실험이 이미 ${active}개입니다. 그래도 옮길까요?`)) return;
+  const from = idea.stage;
+  idea.stage = stage;
+  if (stage === "review") {
+    const d = new Date(); d.setDate(d.getDate() + s.review_every_days);
+    idea.next_review = d.toISOString().slice(0, 10);
+  } else if (stage === "done" || stage === "dropped") {
+    idea.next_review = null;
+  }
+  const now = new Date().toISOString().slice(0, 19);
+  (idea.log = idea.log || []).push({ at: now, from, to: stage, verdict, reason: reason || "" });
+  idea.updated_at = now;
+  save(`${idea.title} → ${labels[stage] || stage}`);
+}
+
+function openIdea(id) {
+  const isNew = !id;
+  const idea = isNew
+    ? { id: "", title: "", p_code: "", s_code: "", notes: "", scores: {}, fdt: null, stage: "ideation", log: [] }
+    : board.ideas.find((i) => i.id === id);
+  const f = idea.fdt || {};
+  const q = QUESTION[idea.stage];
+  const form = $("form");
+  form.innerHTML = `
+    <h3>${isNew ? "새 아이디어" : esc(idea.id) + " · " + esc(labels[idea.stage] || idea.stage)}</h3>
+    <div class="row"><label>제목</label><input name="title" required value="${esc(idea.title)}"></div>
+    <div class="row"><label>P-Code · 누가, 어떤 상황에서, 어떤 문제를 겪나</label><textarea name="p_code">${esc(idea.p_code)}</textarea></div>
+    <div class="row"><label>S-Code · 해결책과 수익 모델</label><textarea name="s_code">${esc(idea.s_code)}</textarea></div>
+    ${isNew ? "" : `
+    <div class="grid2">
+      <div class="row"><label>우선순위</label><input name="priority" type="number" min="1" value="${idea.priority ?? ""}"></div>
+    </div>
+    <div class="section">
+      <h4>점수 (1~5)</h4>
+      <div class="scores">${SCORE_KEYS.map(([k, l]) => `
+        <div class="score"><span>${l}</span><select name="score_${k}">
+          <option value="">-</option>${[1, 2, 3, 4, 5].map((n) => `<option ${idea.scores?.[k] == n ? "selected" : ""}>${n}</option>`).join("")}
+        </select></div>`).join("")}</div>
+      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다.</div>
+    </div>
+    <div class="section">
+      <h4>FDT (가짜 문 테스트)</h4>
+      <div class="grid2">
+        <div class="row"><label>방문</label><input name="visits" type="number" min="0" value="${f.visits ?? ""}"></div>
+        <div class="row"><label>CTA 클릭</label><input name="clicks" type="number" min="0" value="${f.clicks ?? ""}"></div>
+        <div class="row"><label>이메일 제출</label><input name="signups" type="number" min="0" value="${f.signups ?? ""}"></div>
+        <div class="row"><label>선결제</label><input name="paid" type="number" min="0" value="${f.paid ?? ""}"></div>
+      </div>
+      <div class="row"><label>FDT 페이지 URL</label><input name="url" value="${esc(f.url ?? "")}"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+    <div class="section">
+      <h4>판정</h4>
+      ${q ? `<div class="hint">${esc(q)}</div>` : ""}
+      <div class="row"><label>이유</label><input name="reason" placeholder="판정 이유 한 줄"></div>
+      <div class="actions">
+        ${NEXT[idea.stage] ? `<button class="btn go" value="go">예 → ${esc(labels[NEXT[idea.stage]] || NEXT[idea.stage])}</button>` : ""}
+        ${idea.stage !== "dropped" ? `<button class="btn drop" value="drop">아니오 → Drop</button>` : `<button class="btn" value="revive">다시 Ideation으로</button>`}
+        ${["filtering", "review"].includes(idea.stage) ? `<button class="btn hold" value="retry">재실험 / 보완</button>` : ""}
+      </div>
+    </div>
+    <div class="section"><h4>메모</h4><div class="row"><textarea name="notes">${esc(idea.notes)}</textarea></div></div>
+    ${(idea.log || []).length ? `<div class="section"><h4>기록</h4><div class="log">${idea.log.slice().reverse().map((l) =>
+      `<div>${esc(l.at.slice(0, 16).replace("T", " "))} · ${esc(labels[l.from] || l.from)} → ${esc(labels[l.to] || l.to)}${l.verdict ? " · " + esc(l.verdict) : ""}${l.reason ? " · " + esc(l.reason) : ""}</div>`).join("")}</div></div>` : ""}
+    `}
+    <div class="foot">
+      <button class="btn" value="cancel" formnovalidate>닫기</button>
+      <button class="btn primary" value="save">저장</button>
+    </div>`;
+
+  const updateVerdict = () => {
+    const v = $("verdict"); if (!v) return;
+    const n = (k) => Number(form.elements[k].value || 0);
+    const r = judge({ visits: n("visits"), signups: n("signups"), paid: n("paid") }, board.settings);
+    v.className = "verdict" + (r ? " chip " + r[0] : "");
+    v.textContent = r ? `${r[0].toUpperCase()} — ${r[1]}` : "숫자를 넣으면 자동으로 판정합니다.";
+  };
+  if (!isNew) { form.addEventListener("input", updateVerdict); updateVerdict(); }
+
+  form.onsubmit = (e) => {
+    const action = e.submitter?.value;
+    if (action === "cancel") return;
+    const val = (k) => form.elements[k]?.value.trim() ?? "";
+    if (isNew) {
+      if (!val("title")) return;
+      const nums = board.ideas.map((i) => parseInt(i.id.slice(1), 10)).filter((n) => !isNaN(n));
+      const now = new Date().toISOString().slice(0, 19);
+      board.ideas.push({
+        id: "i" + String(Math.max(0, ...nums) + 1).padStart(3, "0"),
+        title: val("title"), p_code: val("p_code"), s_code: val("s_code"),
+        stage: "ideation", priority: null, scores: {}, fdt: null, notes: "", log: [],
+        created_at: now, updated_at: now, next_review: null,
+      });
+      save("추가했습니다");
+      return;
+    }
+    idea.title = val("title") || idea.title;
+    idea.p_code = val("p_code");
+    idea.s_code = val("s_code");
+    idea.notes = val("notes");
+    idea.priority = val("priority") ? Number(val("priority")) : null;
+    idea.scores = {};
+    SCORE_KEYS.forEach(([k]) => { const v = val("score_" + k); if (v) idea.scores[k] = Number(v); });
+    if (val("visits")) {
+      idea.fdt = {
+        visits: Number(val("visits")), clicks: Number(val("clicks") || 0),
+        signups: Number(val("signups") || 0), paid: Number(val("paid") || 0),
+        url: val("url"), updated_at: new Date().toISOString().slice(0, 19),
+      };
+    }
+    const reason = val("reason");
+    if (action === "go") return moveIdea(idea.id, NEXT[idea.stage], "go", reason);
+    if (action === "drop") return moveIdea(idea.id, "dropped", "drop", reason);
+    if (action === "revive") return moveIdea(idea.id, "ideation", "retry", reason);
+    if (action === "retry") {
+      const now = new Date().toISOString().slice(0, 19);
+      (idea.log = idea.log || []).push({ at: now, from: idea.stage, to: idea.stage, verdict: "retry", reason });
+      if (idea.stage === "review") {
+        const d = new Date(); d.setDate(d.getDate() + board.settings.review_every_days);
+        idea.next_review = d.toISOString().slice(0, 10);
+      }
+    }
+    save("저장했습니다");
+  };
+  $("dlg").showModal();
+}
+
+$("addBtn").addEventListener("click", () => openIdea(null));
+load();
+</script>
+</body>
+</html>
