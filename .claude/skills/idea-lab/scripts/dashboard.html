@@ -82,6 +82,11 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
 .meta { display: flex; gap: 16px; padding: 0 20px 12px; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
 .meta b { color: var(--text); }
 
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 0 20px 12px; }
+.toolbar input[type=search], .toolbar select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--surface); }
+.toolbar input[type=search] { flex: 1 1 220px; max-width: 360px; }
+.toolbar label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.collapsed-note { color: var(--muted); font-size: 12px; text-align: center; padding: 12px 4px; }
 .board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(180px, 1fr); gap: 12px; padding: 0 20px 24px; overflow-x: auto; }
 .col { background: var(--surface-2); border-radius: 10px; padding: 10px; min-height: 240px; display: flex; flex-direction: column; gap: 8px; }
 .col.over { outline: 2px dashed var(--accent); outline-offset: -2px; }
@@ -141,7 +146,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .md th { background: var(--surface-2); }
 .foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 600px) {
-  header, .funnel, .meta, .board { padding-left: 16px; padding-right: 16px; }
+  header, .funnel, .meta, .board, .toolbar { padding-left: 16px; padding-right: 16px; }
 }
 </style>
 </head>
@@ -157,6 +162,15 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 <div class="banner" id="banner"></div>
 <div class="funnel" id="funnel"></div>
 <div class="meta" id="meta"></div>
+<div class="toolbar">
+  <input type="search" id="q" placeholder="검색: 제목·P/S·메모·id" aria-label="아이디어 검색">
+  <select id="sort" aria-label="정렬">
+    <option value="priority">우선순위순</option>
+    <option value="score">평균 점수순</option>
+    <option value="updated">최근 수정순</option>
+  </select>
+  <label><input type="checkbox" id="foldDrop" checked> Drop 접기</label>
+</div>
 <main class="board" id="board"></main>
 
 <dialog id="dlg"><form method="dialog" class="dlg" id="form"></form></dialog>
@@ -173,12 +187,23 @@ const QUESTION = {
   review: "독점 가능성과 확장 가능성이 있는가?",
 };
 const SCORE_KEYS = [
-  ["need", "필요성"], ["revenue", "수익성"], ["tenx", "10배 요소"],
+  ["need", "필요성"], ["revenue", "수익성"], ["tenx", "10배 요소"], ["dist", "유통(첫 고객 도달)"], ["fit", "창업자 적합도"],
   ["easy", "따라 하기 어려움"], ["moat", "해자"], ["scale", "확장성"],
 ];
 let board = null;
 let labels = {};
 let research = new Set();
+const view = { q: "", sort: "priority", foldDrop: true, openDrop: false };
+try { Object.assign(view, JSON.parse(localStorage.getItem("labView") || "{}")); } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
+const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ sort: view.sort, foldDrop: view.foldDrop })); } catch (e) {} };
+const AVG_KEYS = ["need", "revenue", "tenx", "dist"];
+const avgOf = (i) => { const v = AVG_KEYS.map((k) => i.scores?.[k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes].join(" ").toLowerCase().includes(view.q.toLowerCase());
+const sorters = {
+  priority: (a, b) => (a.priority ?? 999) - (b.priority ?? 999) || (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
+  score: (a, b) => (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
+  updated: (a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")),
+};
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -255,13 +280,22 @@ function render() {
     <span>FDT 기준: 방문 ${s.fdt_min_visits}명 이상 · 가입률 ${(s.fdt_go_rate * 100).toFixed(0)}% 통과 · ${(s.fdt_retry_rate * 100).toFixed(0)}% 미만 Drop</span>`;
 
   $("board").innerHTML = STAGES.map((st) => {
-    const list = ideas.filter((i) => i.stage === st)
-      .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+    const all = ideas.filter((i) => i.stage === st);
+    const list = all.filter(matches).sort(sorters[view.sort] || sorters.priority);
+    const count = view.q ? `${list.length}/${all.length}` : `${all.length}`;
+    let body = list.map(cardHtml).join("") || '<div class="empty">비어 있음</div>';
+    if (st === "dropped" && view.foldDrop && !view.openDrop && !view.q && list.length) {
+      const flagged = list.filter(isException);
+      body = flagged.map(cardHtml).join("") +
+        `<div class="collapsed-note">${list.length - flagged.length}개 접힘 · <button class="btn" type="button" id="openDrop">펼치기</button></div>`;
+    }
     return `<section class="col" data-stage="${st}">
-      <h2>${esc(labels[st] || st)} <span>${list.length}</span></h2>
-      ${list.map(cardHtml).join("") || '<div class="empty">비어 있음</div>'}
+      <h2>${esc(labels[st] || st)} <span>${count}</span></h2>
+      ${body}
     </section>`;
   }).join("");
+  const od = $("openDrop");
+  if (od) od.addEventListener("click", () => { view.openDrop = true; render(); });
 
   document.querySelectorAll(".card").forEach((el) => {
     el.addEventListener("click", () => openIdea(el.dataset.id));
@@ -280,8 +314,10 @@ function render() {
 function cardHtml(i) {
   const chips = [];
   if (i.priority) chips.push(`<span class="chip pri">P${i.priority}</span>`);
-  const sc = ["need", "revenue", "tenx"].map((k) => i.scores?.[k]).filter((v) => v != null);
-  if (sc.length) chips.push(`<span class="chip">평균 ${(sc.reduce((a, b) => a + b, 0) / sc.length).toFixed(1)}</span>`);
+  const av = avgOf(i);
+  if (av != null) chips.push(`<span class="chip">평균 ${av.toFixed(1)}</span>`);
+  if (i.stage === "filtering" && i.fdt_live?.url) chips.push(`<span class="chip due">FDT 진행</span>`);
+  if (isException(i)) chips.push(`<span class="chip retry">규칙 예외 후보</span>`);
   if (research.has(i.id)) chips.push(`<span class="chip go">조사✓</span>`);
   if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
   if (i.fdt && i.fdt.verdict) {
@@ -300,6 +336,12 @@ function cardHtml(i) {
     <div class="ps">${esc(i.p_code)}${i.s_code ? " · " + esc(i.s_code) : ""}</div>
     ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
   </article>`;
+}
+
+function isException(i) {
+  if (i.stage !== "dropped") return false;
+  const last = (i.log || []).slice(-1)[0];
+  return !!(last && String(last.reason || "").includes("규칙 예외 후보"));
 }
 
 function moveIdea(id, stage, verdict, reason) {
@@ -347,7 +389,7 @@ function openIdea(id) {
         <div class="score"><span>${l}</span>${idea.prelim?.[k] != null ? `<span class="prelim">가안 ${idea.prelim[k]}</span>` : ""}<select name="score_${k}">
           <option value="">-</option>${[1, 2, 3, 4, 5].map((n) => `<option ${idea.scores?.[k] == n ? "selected" : ""}>${n}</option>`).join("")}
         </select></div>`).join("")}</div>
-      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다. '가안'은 조사 때 미리 매긴 점수이고, 따라 하기 어려움·해자·확장성은 5단계에서 확정합니다.</div>
+      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다. 평균은 필요성·수익성·10배·유통으로 계산합니다. '가안'은 조사 때 미리 매긴 점수이고, 따라 하기 어려움·해자·확장성은 5단계에서 확정합니다.</div>
     </div>
     <div class="section">
       <h4>FDT (가짜 문 테스트)</h4>
@@ -493,6 +535,11 @@ setInterval(async () => {
 }, 5000);
 
 $("addBtn").addEventListener("click", () => openIdea(null));
+$("q").addEventListener("input", (e) => { view.q = e.target.value.trim(); if (board) render(); });
+$("sort").value = view.sort;
+$("sort").addEventListener("change", (e) => { view.sort = e.target.value; saveView(); if (board) render(); });
+$("foldDrop").checked = view.foldDrop;
+$("foldDrop").addEventListener("change", (e) => { view.foldDrop = e.target.checked; view.openDrop = false; saveView(); if (board) render(); });
 load();
 </script>
 </body>

@@ -14,7 +14,9 @@ in lab/ideas/<id>.md.
   score ID key=value ...        record scores (1-5); --prelim for provisional ones
   note ID --text T | --file F   set the idea's dashboard note
   edit ID [--title] [--p] [--s]  rewrite title / P-Code / S-Code (logged)
+  fdt-start ID --url U          mark an FDT page as live (checks fdt_capacity)
   fdt ID --visits N ...         record fake-door-test numbers and judge them
+  apply RESULT.json             apply a researcher batch result (scores, notes, auto-drop)
   due                           ideas in review whose 2-day review is due
   set key=value ...             change settings (analytics, ga4_id, thresholds...)
   serve [--port 8765]           open the dashboard (reads/writes board.json)
@@ -47,7 +49,8 @@ SHORT_LABELS = {
 }
 ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]
-SCORE_KEYS = ["need", "revenue", "tenx", "easy", "moat", "scale"]
+SCORE_KEYS = ["need", "revenue", "tenx", "dist", "fit", "easy", "moat", "scale"]
+# need/revenue <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
 DEFAULT_SETTINGS = {
     "max_parallel": 10,
     "fdt_min_visits": 200,
@@ -57,6 +60,8 @@ DEFAULT_SETTINGS = {
     "target_monthly_profit_krw": 3000000,
     "analytics": "",   # ga4 | umami | plausible (asked once, before the first FDT page)
     "ga4_id": "",      # G-XXXXXXXXXX
+    "fdt_capacity": 2, # FDT pages the founder can actually drive traffic to at once (asked once)
+    "founder": "",     # one-paragraph founder profile used for the fit score (asked once)
 }
 NUMERIC_SETTINGS = {k for k, v in DEFAULT_SETTINGS.items() if isinstance(v, (int, float))}
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -230,6 +235,8 @@ def cmd_list(args):
             pri = f"P{i['priority']}" if i.get("priority") else "  -"
             sc = " ".join(f"{k}{i['scores'][k]:g}" for k in SCORE_KEYS if k in i.get("scores", {}))
             extra = f"  [{sc}]" if sc else ""
+            if (i.get("fdt_live") or {}).get("url") and i["stage"] == "filtering":
+                extra += "  FDT진행"
             if i.get("fdt"):
                 extra += f"  FDT:{i['fdt']['verdict']}"
             if research_path(path, i["id"]).exists():
@@ -237,7 +244,7 @@ def cmd_list(args):
             if i.get("parent"):
                 extra += f"  ←{i['parent']}"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
-    print(f"\n{funnel_line(board)}")
+    print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}/{board['settings']['fdt_capacity']}")
     return 0
 
 
@@ -332,6 +339,72 @@ def cmd_edit(args):
     log(idea, idea["stage"], idea["stage"], None, f"{', '.join(changes)} 수정: {args.reason}")
     save(path, board)
     print(f"{idea['id']}: {', '.join(changes)} 수정")
+    return 0
+
+
+def live_fdts(board):
+    return [i for i in board["ideas"] if i["stage"] == "filtering" and (i.get("fdt_live") or {}).get("url")]
+
+
+def cmd_fdt_start(args):
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    if idea["stage"] != "filtering":
+        sys.exit(f"{idea['id']}는 4단계(filtering)가 아닙니다")
+    live = [i for i in live_fdts(board) if i["id"] != idea["id"]]
+    cap = board["settings"]["fdt_capacity"]
+    if len(live) >= cap and not args.force:
+        sys.exit(f"이미 FDT {len(live)}개가 진행 중입니다(여력 {cap}개: {', '.join(i['id'] for i in live)}). "
+                 f"하나를 끝내거나 --force")
+    idea["fdt_live"] = {"url": args.url, "started_at": now()}
+    log(idea, "filtering", "filtering", "hold", f"FDT 시작: {args.url}")
+    save(path, board)
+    print(f"{idea['id']}: FDT 시작 ({len(live) + 1}/{cap})")
+    return 0
+
+
+def clamp_score(v):
+    return min(5, max(1, int(round(float(v)))))
+
+
+def cmd_apply(args):
+    """Apply a researcher batch result: [{id, need, revenue, tenx, dist?, fit?, easy, moat, scale,
+    verdict, reason, pivot?, note?, login_needed?}]. Only ideas still in brainstorming are touched."""
+    path = board_path(args)
+    board = load(path)
+    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    applied = dropped = 0
+    for r in rows:
+        idea = next((i for i in board["ideas"] if i["id"] == r.get("id")), None)
+        if not idea or idea["stage"] != "brainstorming":
+            continue
+        idea.setdefault("scores", {}).update(
+            {k: clamp_score(r[k]) for k in ("need", "revenue", "tenx", "dist", "fit") if r.get(k) is not None})
+        idea.setdefault("prelim", {}).update(
+            {k: clamp_score(r[k]) for k in ("easy", "moat", "scale") if r.get(k) is not None})
+        note = [f"[3단계 조사 {dt.date.today().isoformat()}] 상세: lab/ideas/{idea['id']}.md", str(r.get("note", "")).strip()]
+        if r.get("pivot"):
+            note.append(f"피벗안: {r['pivot']}")
+        if r.get("login_needed"):
+            note.append("로그인 필요 출처: " + ", ".join(map(str, r["login_needed"])))
+        idea["notes"] = "\n".join(x for x in note if x)
+        idea["research_verdict"] = r.get("verdict", "")
+        idea["updated_at"] = now()
+        applied += 1
+        sc = idea["scores"]
+        if sc.get("need", 5) <= 2 or sc.get("revenue", 5) <= 2:
+            reason = f"조사: {r.get('reason', '')}"
+            if r.get("pivot"):
+                reason += f" · 피벗안: {r['pivot']}"
+            if r.get("verdict") in ("pass", "pivot"):
+                reason += " · ⚑ 규칙 예외 후보(조사원은 " + r["verdict"] + ")"
+            idea["stage"], idea["priority"] = "dropped", None
+            log(idea, "brainstorming", "dropped", "drop", reason[:500])
+            dropped += 1
+    save(path, board)
+    print(f"applied {applied}, auto-dropped {dropped}")
+    print(funnel_line(board))
     return 0
 
 
@@ -554,6 +627,16 @@ def main():
     p.add_argument("--paid", type=int, default=0)
     p.add_argument("--url")
     p.set_defaults(func=cmd_fdt)
+
+    p = sub.add_parser("fdt-start")
+    p.add_argument("id")
+    p.add_argument("--url", required=True)
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=cmd_fdt_start)
+
+    p = sub.add_parser("apply")
+    p.add_argument("file")
+    p.set_defaults(func=cmd_apply)
 
     sub.add_parser("due").set_defaults(func=cmd_due)
 
