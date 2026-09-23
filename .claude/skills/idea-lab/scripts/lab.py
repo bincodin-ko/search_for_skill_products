@@ -9,6 +9,10 @@ in lab/ideas/<id>.md.
   add --title T --p P --s S     add an idea at the ideation stage (--from ID for a pivot, --tags a,b)
   import CANDIDATES.json        bulk-add harvested candidates (dedupe, stage 2, pre-filter drops)
   stats                         pass rate per discovery source (which harvester works)
+  verify ID --ok|--fail --note  record the main session's spot-check of key evidence (needed for stage 4)
+  exceptions                    list dropped rule-exception candidates and pivot ideas for user review
+  bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
+  bundle --remove ID..          take ideas out of their bundle
   list [--stage S]              show ideas grouped by stage, with scores
   status                        one-line funnel summary for reports
   show ID                       print one idea as JSON (+ research file path)
@@ -247,6 +251,8 @@ def cmd_list(args):
                 extra += "  조사✓"
             if i.get("parent"):
                 extra += f"  ←{i['parent']}"
+            if i.get("bundle"):
+                extra += f"  [묶음:{i['bundle']}]"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
     cap = board["settings"]["fdt_capacity"]
     print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}" + (f"/{cap}" if cap else ""))
@@ -279,6 +285,9 @@ def cmd_move(args):
         missing = [k for k in ("need", "revenue") if k not in idea.get("scores", {})]
         if missing and not args.force:
             sys.exit(f"3단계 점수({', '.join(missing)})가 없습니다. LAB score 먼저, 또는 --force")
+        if not (idea.get("verified") or {}).get("ok") and not args.force:
+            sys.exit("핵심 근거 표본 검증이 없습니다. 링크를 직접 열어 확인한 뒤 "
+                     "LAB verify <id> --ok --note '..' 먼저, 또는 --force")
     from_stage = idea["stage"]
     idea["stage"] = args.stage
     if args.priority is not None:
@@ -441,6 +450,69 @@ def cmd_import(args):
     return 0
 
 
+def cmd_verify(args):
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    idea["verified"] = {"ok": bool(args.ok), "note": args.note, "at": now()}
+    log(idea, idea["stage"], idea["stage"], "go" if args.ok else "hold",
+        ("표본 검증 통과: " if args.ok else "표본 검증 실패: ") + args.note)
+    save(path, board)
+    print(f"{idea['id']}: 표본 검증 {'통과' if args.ok else '실패'}")
+    return 0
+
+
+def cmd_exceptions(args):
+    board = load(board_path(args))
+    rows = []
+    for i in board["ideas"]:
+        if i["stage"] != "dropped":
+            continue
+        reasons = [str(l.get("reason", "")) for l in i.get("log", [])]
+        flagged = [x for x in reasons if "규칙 예외 후보" in x]
+        if not flagged:
+            continue
+        pivot = ""
+        for x in reversed(reasons):
+            if "피벗안:" in x:
+                pivot = x.split("피벗안:", 1)[1].split(" · ⚑")[0].strip()
+                break
+        s = i.get("scores", {})
+        rows.append((i["id"], s.get("need", "-"), s.get("revenue", "-"), s.get("fit", "-"), i["title"], pivot))
+    if not rows:
+        print("예외 후보 없음")
+        return 0
+    print("id     need rev fit  제목 → 피벗안")
+    for r in rows:
+        print(f"{r[0]:<6} {r[1]!s:>4} {r[2]!s:>3} {r[3]!s:>3}  {r[4]}" + (f"\n       → {r[5][:120]}" if r[5] else ""))
+    print(f"\n{len(rows)}개. 살리려면: LAB move <id> brainstorming --reason '사용자 예외 승인: ..' 또는 피벗이면 LAB add --from <id>")
+    return 0
+
+
+def cmd_bundle(args):
+    path = board_path(args)
+    board = load(path)
+    if args.remove:
+        for iid in args.ids:
+            idea = find(board, iid)
+            old = idea.pop("bundle", None)
+            log(idea, idea["stage"], idea["stage"], None, f"묶음 해제: {old}")
+        save(path, board)
+        print(f"묶음 해제: {', '.join(args.ids)}")
+        return 0
+    if not args.name or len(args.ids) < 2:
+        sys.exit("사용법: LAB bundle <이름> <id> <id> [..] --reason '..' (2개 이상)")
+    if not args.reason:
+        sys.exit("--reason이 필요합니다(왜 같은 FDT로 검증할 수 있나: 같은 고객/같은 엔진)")
+    for iid in args.ids:
+        idea = find(board, iid)
+        idea["bundle"] = args.name
+        log(idea, idea["stage"], idea["stage"], None, f"묶음 '{args.name}': {args.reason}")
+    save(path, board)
+    print(f"묶음 '{args.name}': {', '.join(args.ids)}")
+    return 0
+
+
 def cmd_stats(args):
     """Funnel per discovery source: how many candidates survived each gate."""
     board = load(board_path(args))
@@ -491,6 +563,13 @@ def cmd_apply(args):
         kept = [l for l in str(idea.get("notes", "")).splitlines() if "출처 신호" in l or l.startswith("http")]
         idea["notes"] = "\n".join(x for x in note + kept if x)
         idea["research_verdict"] = r.get("verdict", "")
+        rm = r.get("revenue_math")
+        if isinstance(rm, dict) and rm:
+            idea["revenue_math"] = rm
+            idea["notes"] += (f"\n수익 계산: 가격 {rm.get('price', '?')} × 필요 고객 {rm.get('customers_needed', '?')}"
+                              f" = 월 300만 원 · 근거: {rm.get('basis', '')}")
+        elif idea["scores"].get("revenue", 0) >= 3:
+            print(f"⚠ {idea['id']}: revenue {idea['scores']['revenue']}인데 revenue_math가 없습니다(조사원에게 보완 요청)")
         idea["updated_at"] = now()
         applied += 1
         sc = idea["scores"]
@@ -741,6 +820,22 @@ def main():
     p.set_defaults(func=cmd_import)
 
     sub.add_parser("stats").set_defaults(func=cmd_stats)
+    sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
+
+    p = sub.add_parser("bundle")
+    p.add_argument("name", nargs="?")
+    p.add_argument("ids", nargs="*")
+    p.add_argument("--remove", action="store_true")
+    p.add_argument("--reason")
+    p.set_defaults(func=cmd_bundle)
+
+    p = sub.add_parser("verify")
+    p.add_argument("id")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--ok", action="store_true")
+    g.add_argument("--fail", action="store_true")
+    p.add_argument("--note", required=True, help="what was opened and what it showed")
+    p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("apply")
     p.add_argument("file")

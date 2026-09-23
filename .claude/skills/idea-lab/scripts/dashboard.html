@@ -198,7 +198,7 @@ try { Object.assign(view, JSON.parse(localStorage.getItem("labView") || "{}")); 
 const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ sort: view.sort, foldDrop: view.foldDrop })); } catch (e) {} };
 const AVG_KEYS = ["need", "revenue", "tenx", "dist"];
 const avgOf = (i) => { const v = AVG_KEYS.map((k) => i.scores?.[k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, (i.tags || []).join(" ")].join(" ").toLowerCase().includes(view.q.toLowerCase());
+const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, i.bundle || "", (i.tags || []).join(" ")].join(" ").toLowerCase().includes(view.q.toLowerCase());
 const sorters = {
   priority: (a, b) => (a.priority ?? 999) - (b.priority ?? 999) || (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
   score: (a, b) => (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
@@ -319,7 +319,9 @@ function cardHtml(i) {
   if (i.stage === "filtering" && i.fdt_live?.url) chips.push(`<span class="chip due">FDT 진행</span>`);
   if (isException(i)) chips.push(`<span class="chip retry">규칙 예외 후보</span>`);
   if (research.has(i.id)) chips.push(`<span class="chip go">조사✓</span>`);
+  if (i.verified) chips.push(`<span class="chip ${i.verified.ok ? "go" : "drop"}">검증${i.verified.ok ? "✓" : "✗"}</span>`);
   if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
+  if (i.bundle) chips.push(`<span class="chip pri">묶음 ${esc(i.bundle)}</span>`);
   (i.tags || []).slice(0, 2).forEach((t) => chips.push(`<span class="chip">#${esc(t)}</span>`));
   if (i.fdt && i.fdt.verdict) {
     const rate = i.fdt.visits ? ((i.fdt.signups / i.fdt.visits) * 100).toFixed(1) + "%" : "";
