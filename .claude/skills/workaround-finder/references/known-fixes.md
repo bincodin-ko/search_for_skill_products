@@ -24,3 +24,4 @@
   - 요금: Free 월 500 크레딧(Vault·메모리·CLI·MCP, 루틴 3개), Pro 1,500, Max 15,000. Claude Pro/Max 구독이나 API 키를 연결하면 크레딧을 쓰지 않음. 출처: https://daleseo.com/aside/ (공식 가격 페이지 https://aside.com/pricing 에서 재확인 필요)
   - 자격 증명: Vault에 암호화 저장, 모델에는 "로그인" 동작만 전달, 대상 URL 검사
   - 앱이 켜져 있어야 MCP가 동작하는지: 문서에 없음(확인 필요)
+  - **앱을 설치해도 CLI(`aside` 명령)는 따로 설치해야 한다**(2026-09-24 확인: 앱은 `C:\Program Files\Aside`에 있었지만 `aside` 명령이 없었다). 가장 쉬운 방법은 Aside 앱의 개발자 설정 페이지에서 CLI 설치. 공식 PowerShell 설치 스크립트도 있다(서명 검증 포함). 설치 후 새 터미널을 열어야 PATH가 잡힌다
