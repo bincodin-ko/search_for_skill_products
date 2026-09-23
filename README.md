@@ -283,6 +283,11 @@ npx skills add vercel-labs/json-render --skill core
 
 **바로 할 일:** gstack 설치 후 아이디어 1개로 `/office-hours` 돌려보기 (약 20분)
 
+**직접 만든 스킬: [`idea-blueprint`](.claude/skills/idea-blueprint/SKILL.md)** — 위 빈칸을 채우는 용도
+- 순서: 문제 정의 → **조기 중단 검토(필요성·수익성 점수, 필요 유료 고객 수 계산 → 가망 없으면 바로 접음)** → 수요 → 경쟁사 → 롤모델 UX 해부 → 디자인 → 첫 출시 범위(3주, 기능 넓게) → 화면 단위 유저 플로우 → 초반 입지·인지도 전략 → 출시 후 중단 기준
+- 사용: 이 저장소에서 Claude를 실행하고 `이 아이디어 블루프린트 만들어줘: <아이디어 한 줄>`
+- 결과: `docs/blueprint/<이름>.md`
+
 **출처:** 위 링크 + [Lenny: 첫 1,000명 확보 전략](https://www.lennysnewsletter.com/p/how-the-biggest-consumer-apps-got) · [Mobbin MCP](https://mobbin.com/mcp) · [디스콰이엇](https://disquiet.io/)
 
 ---

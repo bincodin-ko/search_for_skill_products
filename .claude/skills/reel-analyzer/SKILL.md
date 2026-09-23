@@ -133,6 +133,17 @@ PY TOOLS frames OUT/media.mp4 OUT/frames --max 15
 4. 파일 위치: `OUT/analysis.md`
 5. 확보 실패한 항목이 있으면 무엇이 왜 실패했는지 한 줄
 
+## 8단계: 결과 올리기 (클라우드 세션과 공유)
+
+텍스트 결과만 커밋해서 GitHub에 올린다. 영상·음성·캡처는 `.gitignore`로 빠진다.
+```
+git add reels/<ID>/*.md reels/<ID>/transcript.*
+git commit -m "Add reel analysis <ID>"
+git push
+```
+- 푸시하면 클라우드의 Claude 세션도 `git pull`로 같은 결과를 읽을 수 있다.
+- 푸시가 GitHub 로그인을 요구하면 사용자에게 뜨는 로그인 창에서 한 번만 로그인해 달라고 알린다.
+
 ## 문제 해결
 
 | 증상 | 원인 | 대응 |
