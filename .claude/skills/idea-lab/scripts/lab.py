@@ -60,7 +60,7 @@ DEFAULT_SETTINGS = {
     "target_monthly_profit_krw": 3000000,
     "analytics": "",   # ga4 | umami | plausible (asked once, before the first FDT page)
     "ga4_id": "",      # G-XXXXXXXXXX
-    "fdt_capacity": 2, # FDT pages the founder can actually drive traffic to at once (asked once)
+    "fdt_capacity": 0, # optional cap on live FDT pages at once; 0 = no limit (not asked by default)
     "founder": "",     # one-paragraph founder profile used for the fit score (asked once)
 }
 NUMERIC_SETTINGS = {k for k, v in DEFAULT_SETTINGS.items() if isinstance(v, (int, float))}
@@ -244,7 +244,8 @@ def cmd_list(args):
             if i.get("parent"):
                 extra += f"  ←{i['parent']}"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
-    print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}/{board['settings']['fdt_capacity']}")
+    cap = board["settings"]["fdt_capacity"]
+    print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}" + (f"/{cap}" if cap else ""))
     return 0
 
 
@@ -354,13 +355,13 @@ def cmd_fdt_start(args):
         sys.exit(f"{idea['id']}는 4단계(filtering)가 아닙니다")
     live = [i for i in live_fdts(board) if i["id"] != idea["id"]]
     cap = board["settings"]["fdt_capacity"]
-    if len(live) >= cap and not args.force:
+    if cap and len(live) >= cap and not args.force:
         sys.exit(f"이미 FDT {len(live)}개가 진행 중입니다(여력 {cap}개: {', '.join(i['id'] for i in live)}). "
                  f"하나를 끝내거나 --force")
     idea["fdt_live"] = {"url": args.url, "started_at": now()}
     log(idea, "filtering", "filtering", "hold", f"FDT 시작: {args.url}")
     save(path, board)
-    print(f"{idea['id']}: FDT 시작 ({len(live) + 1}/{cap})")
+    print(f"{idea['id']}: FDT 시작 ({len(live) + 1}" + (f"/{cap})" if cap else "개 진행 중)"))
     return 0
 
 

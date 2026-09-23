@@ -13,11 +13,11 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 - **빨리 많이 버린다.** 애매하면 붙잡지 말고 Drop하거나 대기시킨다.
 - **근거 없이 채점하지 않는다.** 3단계 점수는 리서처의 빠른 조사(경쟁사·가격·무료 대체재) 뒤에 매긴다. 아는 것만으로 매긴 점수는 판정에 쓰지 않는다. 조사가 불가능해 추정으로 매겼다면 보고 표에 "추정"이라고 적는다.
 - **FDT 페이지를 만들기 전에 조사로 먼저 거른다.** 조사만으로 수익성·필요성이 2 이하로 떨어지면 페이지를 만들지 않고 Drop하거나 피벗한다.
-- 4·5단계에 올릴 수 있는 아이디어는 최대 `max_parallel`개(기본 10개)다. 그중 **실제로 방문자를 보내는 FDT는 `fdt_capacity`개**(사용자 여력, 기본 2개)까지만 동시에 연다(`LAB fdt-start`가 막는다).
+- 4·5단계에 올릴 수 있는 아이디어는 최대 `max_parallel`개(기본 10개)다. FDT를 실제로 배포하면 `LAB fdt-start`로 표시한다. 동시에 여는 FDT 수에 상한이 필요하면 사용자가 요청할 때만 `LAB set fdt_capacity=N`(기본 0 = 제한 없음).
 - **규칙이 조사원 의견보다 우선한다.** need·revenue가 2 이하면 조사원이 pass라고 해도 Drop한다. 다만 조사원이 pass/pivot이라고 했으면 `LAB apply`가 Drop 사유에 "⚑ 규칙 예외 후보"를 붙이고, 대시보드 Drop 칸 맨 위에 남는다. 결정권자는 보고 때 예외 후보를 따로 보여주고 **살릴지는 사용자가 정한다**(살리면 `LAB move <id> brainstorming --reason "사용자 예외 승인: .."`).
 - 모든 이동은 `LAB move ... --reason "근거"`로 기록한다(`--reason` 필수).
 - 사용자에게 시키는 일은 네 가지뿐이다: 최초 1회 설정, FDT 페이지에 방문자를 보내는 일(트래픽), 로그인이 필요한 출처를 열어 주는 일, 판정 확인.
-  - 최초 설정은 필요한 순간에 한 번씩만 묻는다: 창업자 프로필(첫 3단계 채점 전, `LAB set founder=".."`), FDT 여력(첫 FDT 전, `LAB set fdt_capacity=N`), 분석 도구·측정 ID(첫 FDT 페이지를 만들 때).
+  - 최초 설정은 필요한 순간에 한 번씩만 묻는다: 창업자 프로필(첫 3단계 채점 전, `LAB set founder=".."`), 분석 도구·측정 ID(첫 FDT 페이지를 만들 때).
   - 외부에 사용자 이름으로 연락하는 일(제휴 제안, DM, 게시)은 초안까지만 만들고 보내는 건 사용자가 한다.
 
 ## 파일과 명령
@@ -34,9 +34,9 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
   - `LAB score <id> --prelim easy=2 moat=1 scale=3` — 가안 점수(5단계 전에 미리 본 값)
   - `LAB note <id> --text ".."` — 카드 메모란에 조사 요약 5~8줄(조사 파일 전체는 넣지 않는다. 대시보드가 따로 보여준다)
   - `LAB apply lab/batches/resultN.json` — 여러 아이디어 조사 결과를 한 번에 반영(점수·가안·메모, need/revenue ≤ 2 자동 Drop, 예외 후보 표시). 3단계에 남은 것만 건드린다
-  - `LAB fdt-start <id> --url ..` — FDT 페이지를 실제로 배포해 방문자를 보내기 시작할 때. `fdt_capacity`를 넘으면 막는다
+  - `LAB fdt-start <id> --url ..` — FDT 페이지를 실제로 배포해 방문자를 보내기 시작할 때(`fdt_capacity`를 설정했으면 넘을 때 막는다)
   - `LAB fdt <id> --visits 320 --clicks 40 --signups 19 [--paid 2] [--url ..]`
-  - `LAB set analytics=ga4 ga4_id=G-XXXX fdt_capacity=2 founder=".."` / `LAB due` / `LAB serve`
+  - `LAB set analytics=ga4 ga4_id=G-XXXX founder=".."` / `LAB due` / `LAB serve`
 - stage 값: `ideation` `incubating` `brainstorming` `filtering` `review` `done` `dropped`
 - Windows PowerShell 5.1 주의: `$`가 든 문구는 작은따옴표로 감싼다(`"월 $10"`은 `$10`이 변수로 사라진다). 인자 안의 큰따옴표는 깨지므로, 여러 줄 메모나 큰따옴표가 든 문구는 스크래치 파일에 써서 `LAB note <id> --file <파일>`로 넣는다
 - 보드를 고칠 때는 항상 `LAB` 명령을 쓴다. board.json을 직접 편집하지 않는다(대시보드와의 충돌 방지용 `rev`가 깨진다)
@@ -160,8 +160,8 @@ resultN.json = [{"id":"i009","need":3,"revenue":2,"tenx":2,"dist":3,"fit":2,"eas
 - 게이트를 통과한 것만 FDT로 간다
 
 **정량 검증: FDT (가짜 문 테스트)**
-0. 첫 FDT라면 설정을 한 번 묻는다: 분석 도구(GA4 추천 — 무료, 구글 계정만 있으면 됨 / Umami / Plausible)와 측정 ID, 그리고 **동시에 방문자를 보낼 수 있는 FDT 개수**(여력). `LAB set analytics=ga4 ga4_id=G-.. fdt_capacity=N`로 저장하고 이후에는 다시 묻지 않는다
-   - 페이지는 우선순위 순으로 `fdt_capacity`개만 만든다. 배포해서 방문자를 보내기 시작하면 `LAB fdt-start <id> --url ..`, 결론이 나면(`review`로 이동하거나 Drop) 다음 순위 페이지를 만든다
+0. 첫 FDT라면 설정을 한 번 묻는다: 분석 도구(GA4 추천 — 무료, 구글 계정만 있으면 됨 / Umami / Plausible)와 측정 ID. `LAB set analytics=ga4 ga4_id=G-..`로 저장하고 이후에는 다시 묻지 않는다
+   - 페이지는 우선순위 순으로 만든다. 배포해서 방문자를 보내기 시작하면 `LAB fdt-start <id> --url ..`로 표시한다
 1. `lab/fdt/<id>/index.html`에 한 파일 랜딩페이지를 만든다. `anthropic-skills:design-router`를 거친다
    - 헤드라인(P-Code의 문제를 한 문장으로), 문제 3개(불편 원문에서 가져온다), 해결 방식, **가격표(실제 가격을 적는다. 경쟁사 가격 기준점을 참고)**, 맨 아래 CTA "출시 알림 받기"
    - 폼은 무료 폼 서비스(Tally 등)를 임베드하거나 링크한다. 제출 후 "아직 준비 중이며 출시 때 가장 먼저 알려드립니다"를 보여준다(정직하게)
