@@ -6,7 +6,9 @@ dashboard both read and write that one file. Research notes live next to it
 in lab/ideas/<id>.md.
 
   init                          create lab/board.json
-  add --title T --p P --s S     add an idea at the ideation stage (--from ID for a pivot)
+  add --title T --p P --s S     add an idea at the ideation stage (--from ID for a pivot, --tags a,b)
+  import CANDIDATES.json        bulk-add harvested candidates (dedupe, stage 2, pre-filter drops)
+  stats                         pass rate per discovery source (which harvester works)
   list [--stage S]              show ideas grouped by stage, with scores
   status                        one-line funnel summary for reports
   show ID                       print one idea as JSON (+ research file path)
@@ -23,6 +25,7 @@ in lab/ideas/<id>.md.
 """
 import argparse
 import datetime as dt
+import difflib
 import json
 import os
 import re
@@ -209,6 +212,7 @@ def cmd_add(args):
         "fdt": None,
         "notes": args.notes or "",
         "parent": args.parent,
+        "tags": [t.strip() for t in (args.tags or "").split(",") if t.strip()],
         "log": [],
         "created_at": now(),
         "updated_at": now(),
@@ -369,6 +373,101 @@ def clamp_score(v):
     return min(5, max(1, int(round(float(v)))))
 
 
+def norm_title(t):
+    return re.sub(r"[\s·\-_/()·,.+]+", "", str(t)).lower()
+
+
+def similar_idea(board, title, threshold=0.82):
+    """Return an existing idea whose title is nearly the same, else None."""
+    n = norm_title(title)
+    for i in board["ideas"]:
+        m = norm_title(i["title"])
+        if n == m or (n and m and difflib.SequenceMatcher(None, n, m).ratio() >= threshold):
+            return i
+    return None
+
+
+def cmd_import(args):
+    """Bulk-add harvested candidates:
+    [{title, p, s, tags:[..], signal, signal_url, source, prefilter:"pass"|"drop: <reason>", parent?}]
+    Adds each at ideation, passes P/S clarity (stage 2) when p and s are present, and records
+    pre-filter drops. Near-duplicate titles (vs board and within the file) are skipped."""
+    path = board_path(args)
+    board = load(path)
+    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    added = skipped = dropped = 0
+    for r in rows:
+        title = str(r.get("title", "")).strip()
+        if not title:
+            continue
+        dup = similar_idea(board, title)
+        if dup:
+            print(f"skip (비슷한 아이디어 {dup['id']} {dup['title']}): {title}")
+            skipped += 1
+            continue
+        parent = r.get("parent")
+        if parent and not any(i["id"] == parent for i in board["ideas"]):
+            parent = None
+        signal = str(r.get("signal", "")).strip()
+        url = str(r.get("signal_url", "")).strip()
+        note = f"[{r.get('source', '발굴')}] 출처 신호: {signal}" + (f"\n{url}" if url else "")
+        if r.get("pay_signal"):
+            note += f"\n지불 증거(출처 신호): {r['pay_signal']}"
+        idea = {
+            "id": next_id(board), "title": title,
+            "p_code": str(r.get("p", "")).strip(), "s_code": str(r.get("s", "")).strip(),
+            "stage": "ideation", "priority": None, "scores": {}, "prelim": {}, "fdt": None,
+            "notes": note, "parent": parent,
+            "source": str(r.get("source", "")).strip(),
+            "signal": signal, "signal_url": url,
+            "tags": [str(t).strip() for t in r.get("tags", []) if str(t).strip()],
+            "log": [], "created_at": now(), "updated_at": now(), "next_review": None,
+        }
+        board["ideas"].append(idea)
+        added += 1
+        pf = str(r.get("prefilter", "pass")).strip()
+        if pf.lower().startswith("drop"):
+            idea["stage"] = "dropped"
+            log(idea, "ideation", "dropped", "drop", "사전 필터: " + pf.split(":", 1)[-1].strip())
+            dropped += 1
+        elif idea["p_code"] and idea["s_code"] and (signal or url):
+            log(idea, "ideation", "incubating", "go", "P/S 명확 · 출처 신호 있음")
+            log(idea, "incubating", "brainstorming", "go", "P-S 명확성 통과 · 사전 필터 통과")
+            idea["stage"] = "brainstorming"
+        print(f"{idea['id']}  {idea['stage']:<13} {title}")
+    save(path, board)
+    print(f"added {added} (사전 필터 drop {dropped}), skipped {skipped} duplicates")
+    print(funnel_line(board))
+    return 0
+
+
+def cmd_stats(args):
+    """Funnel per discovery source: how many candidates survived each gate."""
+    board = load(board_path(args))
+    rows = {}
+    for i in board["ideas"]:
+        src = i.get("source") or "직접 추가"
+        r = rows.setdefault(src, {"후보": 0, "사전필터": 0, "조사drop": 0, "3단계": 0, "4단계+": 0, "예외후보": 0})
+        r["후보"] += 1
+        reasons = [str(l.get("reason", "")) for l in i.get("log", [])]
+        if any(x.startswith("사전 필터:") for x in reasons):
+            r["사전필터"] += 1
+        elif i["stage"] == "dropped":
+            r["조사drop"] += 1
+        elif i["stage"] in ("filtering", "review", "done"):
+            r["4단계+"] += 1
+        elif i["stage"] == "brainstorming" and i.get("scores"):
+            r["3단계"] += 1
+        if i["stage"] == "dropped" and any("규칙 예외 후보" in x for x in reasons):
+            r["예외후보"] += 1
+    cols = ["후보", "사전필터", "조사drop", "3단계", "4단계+", "예외후보"]
+    print(f"{'출처':<16}" + "".join(f"{c:>8}" for c in cols) + "   통과율")
+    for src, r in sorted(rows.items(), key=lambda kv: -kv[1]["후보"]):
+        passed = r["3단계"] + r["4단계+"]
+        print(f"{src:<16}" + "".join(f"{r[c]:>8}" for c in cols) + f"   {passed / r['후보']:.0%}")
+    return 0
+
+
 def cmd_apply(args):
     """Apply a researcher batch result: [{id, need, revenue, tenx, dist?, fit?, easy, moat, scale,
     verdict, reason, pivot?, note?, login_needed?}]. Only ideas still in brainstorming are touched."""
@@ -389,7 +488,8 @@ def cmd_apply(args):
             note.append(f"피벗안: {r['pivot']}")
         if r.get("login_needed"):
             note.append("로그인 필요 출처: " + ", ".join(map(str, r["login_needed"])))
-        idea["notes"] = "\n".join(x for x in note if x)
+        kept = [l for l in str(idea.get("notes", "")).splitlines() if "출처 신호" in l or l.startswith("http")]
+        idea["notes"] = "\n".join(x for x in note + kept if x)
         idea["research_verdict"] = r.get("verdict", "")
         idea["updated_at"] = now()
         applied += 1
@@ -578,6 +678,7 @@ def main():
     p.add_argument("--s", help="S-Code: solution and business model")
     p.add_argument("--notes")
     p.add_argument("--from", dest="parent", help="id of the idea this one pivots from")
+    p.add_argument("--tags", help="comma-separated tags, e.g. B2B,자영업")
     p.set_defaults(func=cmd_add)
 
     p = sub.add_parser("list")
@@ -634,6 +735,12 @@ def main():
     p.add_argument("--url", required=True)
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_fdt_start)
+
+    p = sub.add_parser("import")
+    p.add_argument("file")
+    p.set_defaults(func=cmd_import)
+
+    sub.add_parser("stats").set_defaults(func=cmd_stats)
 
     p = sub.add_parser("apply")
     p.add_argument("file")
