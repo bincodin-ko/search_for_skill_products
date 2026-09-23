@@ -25,3 +25,4 @@
   - 자격 증명: Vault에 암호화 저장, 모델에는 "로그인" 동작만 전달, 대상 URL 검사
   - 앱이 켜져 있어야 MCP가 동작하는지: 문서에 없음(확인 필요)
   - **앱을 설치해도 CLI(`aside` 명령)는 따로 설치해야 한다**(2026-09-24 확인: 앱은 `C:\Program Files\Aside`에 있었지만 `aside` 명령이 없었다). 가장 쉬운 방법은 Aside 앱의 개발자 설정 페이지에서 CLI 설치. 공식 PowerShell 설치 스크립트도 있다(서명 검증 포함). 설치 후 새 터미널을 열어야 PATH가 잡힌다
+  - **연결 확인됨(2026-09-24, Windows, CLI 1.26.916.1741):** CLI 위치 `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`. PATH가 반영되기 전인 창에서도 되도록 전체 경로로 등록: `claude mcp add --scope user aside -- "C:\Users\<사용자>\AppData\Local\Aside\CLI\current\aside.exe" mcp` → `claude mcp list`에서 `✔ Connected`. Aside 도구는 Claude를 **재시작해야** 세션에 나타난다
