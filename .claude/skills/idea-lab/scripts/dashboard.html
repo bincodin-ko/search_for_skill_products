@@ -108,6 +108,11 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
 .chip.hold { background: var(--hold-soft); color: var(--hold); }
 .chip.pri { background: var(--accent-soft); color: var(--accent); }
 .chip.due { background: var(--retry-soft); color: var(--retry); }
+.why { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+.why b { color: var(--drop); font-weight: 600; }
+.dropfilter { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.dropfilter button { font-size: 11px; border: 1px solid var(--border, #ccc); background: var(--surface-2); color: var(--muted); border-radius: 99px; padding: 2px 8px; cursor: pointer; }
+.dropfilter button.on { background: var(--drop-soft); color: var(--drop); border-color: var(--drop); }
 .empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 4px; }
 
 .banner { margin: 0 20px 12px; padding: 10px 14px; border-radius: 8px; background: var(--drop-soft); color: var(--drop); display: none; }
@@ -193,7 +198,12 @@ const SCORE_KEYS = [
 let board = null;
 let labels = {};
 let research = new Set();
-const view = { q: "", sort: "priority", foldDrop: true, openDrop: false };
+const view = { q: "", sort: "priority", foldDrop: true, openDrop: false, dropType: "" };
+const DROP_LABELS = {
+  merged: "합침·중복", cant_build: "만들 수 없음", legal: "법·자격·규제", solved_free: "이미 무료로 해결됨",
+  competitor: "자리 잡은 경쟁 제품", one_off: "한 번 쓰고 끝", small_market: "사람이 적거나 돈을 안 냄",
+  weak_evidence: "조사·증거 부족", no_pain: "불편이 약함", other: "기타",
+};
 try { Object.assign(view, JSON.parse(localStorage.getItem("labView") || "{}")); } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
 const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ sort: view.sort, foldDrop: view.foldDrop })); } catch (e) {} };
 const AVG_KEYS = ["need", "revenue", "tenx", "dist"];
@@ -281,19 +291,30 @@ function render() {
 
   $("board").innerHTML = STAGES.map((st) => {
     const all = ideas.filter((i) => i.stage === st);
-    const list = all.filter(matches).sort(sorters[view.sort] || sorters.priority);
+    let list = all.filter(matches).sort(sorters[view.sort] || sorters.priority);
+    let filterBar = "";
+    if (st === "dropped") {
+      const counts = {};
+      all.forEach((i) => { const t = i.drop?.type || "other"; counts[t] = (counts[t] || 0) + 1; });
+      filterBar = `<div class="dropfilter">${Object.keys(DROP_LABELS).filter((k) => counts[k]).map((k) =>
+        `<button type="button" data-dt="${k}" class="${view.dropType === k ? "on" : ""}">${DROP_LABELS[k]} ${counts[k]}</button>`).join("")}</div>`;
+      if (view.dropType) list = list.filter((i) => (i.drop?.type || "other") === view.dropType);
+    }
     const count = view.q ? `${list.length}/${all.length}` : `${all.length}`;
     let body = list.map(cardHtml).join("") || '<div class="empty">비어 있음</div>';
-    if (st === "dropped" && view.foldDrop && !view.openDrop && !view.q && list.length) {
+    if (st === "dropped" && view.foldDrop && !view.openDrop && !view.q && !view.dropType && list.length) {
       const flagged = list.filter(isException);
       body = flagged.map(cardHtml).join("") +
         `<div class="collapsed-note">${list.length - flagged.length}개 접힘 · <button class="btn" type="button" id="openDrop">펼치기</button></div>`;
     }
     return `<section class="col" data-stage="${st}">
       <h2>${esc(labels[st] || st)} <span>${count}</span></h2>
-      ${body}
+      ${filterBar}${body}
     </section>`;
   }).join("");
+  document.querySelectorAll(".dropfilter button").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation(); view.dropType = view.dropType === b.dataset.dt ? "" : b.dataset.dt; render();
+  }));
   const od = $("openDrop");
   if (od) od.addEventListener("click", () => { view.openDrop = true; render(); });
 
@@ -322,6 +343,12 @@ function cardHtml(i) {
   if (i.verified) chips.push(`<span class="chip ${i.verified.ok ? "go" : "drop"}">검증${i.verified.ok ? "✓" : "✗"}</span>`);
   if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
   if (i.bundle) chips.push(`<span class="chip pri">묶음 ${esc(i.bundle)}</span>`);
+  if (i.gate && i.stage !== "dropped") {
+    const keys = ["compete", "pain", "pay", "math", "build", "redteam"];
+    const n = keys.filter((k) => i.gate[k]?.v === "pass").length;
+    const miss = keys.filter((k) => i.gate[k]?.v !== "pass");
+    chips.push(`<span class="chip ${n === 6 ? "go" : "retry"}" title="미통과: ${miss.join(", ")}">관문 ${n}/6</span>`);
+  }
   (i.tags || []).slice(0, 2).forEach((t) => chips.push(`<span class="chip">#${esc(t)}</span>`));
   if (i.fdt && i.fdt.verdict) {
     const rate = i.fdt.visits ? ((i.fdt.signups / i.fdt.visits) * 100).toFixed(1) + "%" : "";
@@ -331,13 +358,14 @@ function cardHtml(i) {
     const due = i.next_review <= today();
     chips.push(`<span class="chip ${due ? "due" : ""}">리뷰 ${esc(i.next_review.slice(5))}</span>`);
   }
-  const last = (i.log || []).slice(-1)[0];
-  if (i.stage === "dropped" && last && last.reason) chips.push(`<span class="chip drop">${esc(last.reason.slice(0, 24))}</span>`);
+  const whyHtml = i.stage === "dropped" && i.drop
+    ? `<div class="why"><b>${esc(DROP_LABELS[i.drop.type] || i.drop.type)}</b> · ${esc(i.drop.summary || "")}</div>` : "";
   return `<article class="card" draggable="true" data-id="${esc(i.id)}">
     <div class="id">${esc(i.id)}</div>
     <div class="t">${esc(i.title)}</div>
     <div class="ps">${esc(i.p_code)}${i.s_code ? " · " + esc(i.s_code) : ""}</div>
     ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
+    ${whyHtml}
   </article>`;
 }
 
@@ -382,6 +410,7 @@ function openIdea(id) {
     <div class="row"><label>P-Code · 누가, 어떤 상황에서, 어떤 문제를 겪나</label><textarea name="p_code">${esc(idea.p_code)}</textarea></div>
     <div class="row"><label>S-Code · 해결책과 수익 모델</label><textarea name="s_code">${esc(idea.s_code)}</textarea></div>
     ${isNew ? "" : `
+    ${idea.stage === "dropped" && idea.drop ? `<div class="section"><h4>Drop 이유 · ${esc(DROP_LABELS[idea.drop.type] || idea.drop.type)}</h4><div class="why">${esc(idea.drop.from || idea.drop.summary || "")}</div></div>` : ""}
     ${research.has(idea.id) ? `<div class="section"><h4>조사 (lab/ideas/${esc(idea.id)}.md)</h4><div class="md" id="research">불러오는 중…</div></div>` : ""}
     <div class="grid2">
       <div class="row"><label>우선순위</label><input name="priority" type="number" min="1" value="${idea.priority ?? ""}"></div>

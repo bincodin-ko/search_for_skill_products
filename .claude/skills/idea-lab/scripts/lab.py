@@ -13,6 +13,7 @@ in lab/ideas/<id>.md.
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
   pending                       stage-3 ideas without scores (and which have an interrupted research file)
   fdt-scaffold ID|BUNDLE        generate lab/fdt/<target>/index.html from the template (plans per idea, GA4, tracking)
+  drops [--type T] [--md]        Drop reasons by type (competitor, solved_free, small_market, weak_evidence, ...)
   gate ID [--set k=pass ..]     the 6-item stage-4 gate (compete pain pay math build redteam)
   audit FILE                    apply red-team audit results (.jsonl) to the gate
   gated [--all]                 ideas whose research left login-gated sources; default = only ones login data could still change
@@ -116,8 +117,79 @@ def load(path):
         sys.exit(str(exc))
 
 
+# Drop 사유 유형 — 사용자가 한눈에 보도록 모든 Drop에 붙인다(순서 = 자동 분류 우선순위)
+DROP_TYPES = {
+    "merged": "다른 아이디어에 합침·중복",
+    "cant_build": "만들 수 없음(API·약관·기술)",
+    "legal": "법·자격·규제 문제",
+    "solved_free": "이미 무료로 해결됨(플랫폼 기본·정부·범용 AI)",
+    "competitor": "이미 자리 잡은 경쟁 제품",
+    "one_off": "한 번 쓰고 끝남(반복 가치 없음)",
+    "small_market": "문제를 가진 사람이 적거나 돈을 안 냄",
+    "weak_evidence": "조사·증거 부족(원문·지불 증거 못 찾음)",
+    "no_pain": "불편이 약함",
+    "other": "기타",
+}
+_DROP_RULES = [
+    ("merged", r"합침|중복|같은 아이디어|i\d{3}.{0,20}흡수|기능으로 합"),
+    ("cant_build", r"공개 ?API|쓰기 API|API.{0,6}(없|부재|미제공|미지원|미전달|전용)|build 불가|제작 불가|스크래핑|계정 자동화|브라우저 자동화|기술 정확도"),
+    ("legal", r"변호사법|세무사|노무사|행정사|법무사|자격 업무|전문 ?자격|의료행위|신용정보법|약관(상|위반| 위험)|불법|위법|규제 위험|개인정보 거래|자격이 필요|인증 영역"),
+    ("one_off", r"한 번 (쓰고|고치면|하고)|1회성|일회성|평생 한두|한두 번"),
+    ("solved_free", r"무료로 (제공|공개|안내|지원|해결|할 수|쓸 수)|무료 (앱|대체|도구|계산기|플랜|서비스|양식|기능|제공|번들)|기본 (기능|내장|제공|탑재)|기본으로|네이티브|(정부|공공|국토부|고용노동부|식약처|관세청|국세청|KISA|지자체|보건소|고용24|홈택스).{0,25}(무료|제공|안내)|범용 AI|AI 래퍼|플랫폼 자체|자체 (AI|메뉴)|AI 신기능|카카오모먼트AI|AI 사전검수|GPT만|오픈소스|도 무료|무료화|월 0원|무료 요금제|기본 [가-힣]{0,6} ?기능|로 충분|으로 충분|로 해결됨"),
+    ("competitor", r"이미|경쟁|존재|제공 중|판매 중|운영 중|영업 중|다수|선점|앱 \d+개|제품 \d+개|기존 (유료|앱|도구|솔루션|제품|해결)|동일 (기능|패키지|목적)|같은 (기능|일|모델)|선검증 실패|포화|레드오션|솔루션.{0,10}(있|제공)|과 겹침|와 겹침"),
+    ("small_market", r"시장.{0,6}작|규모.{0,8}(작|미달|좁)|소수|대상.{0,8}(적|좁)|지불 (의사|의향).{0,4}약|돈을 (안|내지)|월 ?300만 불가|고객 0명|revenue 2|수익성 2|너무 좁|대상이.{0,25}(한정|해당 없|맞지 않)|해당 없음|지불 유인|구독 근거"),
+    ("weak_evidence", r"원문.{0,4}(0건|없|못)|증거.{0,4}(없|부족|못|미충족)|확인 (못|안 ?됨)|못 찾|근거.{0,4}(부족|약|없|불충분)|미확인|미충족|사실 자체|하지 못|유추|간접 확인|검증하지"),
+    ("no_pain", r"need 1|필요성 (1|2)|불편.{0,4}약"),
+]
+
+
+def drop_reason_text(idea):
+    for l in reversed(idea.get("log") or []):
+        if l.get("to") == "dropped" and l.get("reason"):
+            return str(l["reason"])
+    return ""
+
+
+def classify_drop(idea):
+    import re as _re
+    reason = drop_reason_text(idea)
+    text = reason + " " + str((idea.get("verified") or {}).get("note", ""))
+    for key, pat in _DROP_RULES:
+        if _re.search(pat, text):
+            kind = key
+            break
+    else:
+        sc = idea.get("scores") or {}
+        if (sc.get("need") or 5) <= 2:
+            kind = "no_pain"
+        elif (sc.get("revenue") or 5) <= 2:
+            kind = "small_market"
+        else:
+            kind = "other"
+    summary = _re.sub(r"^\s*(선검증 실패|선검증|조사|보류 판정|보류 확인[^:]*|레드팀 감사 kill|레드팀 감사|레드팀|관문 [^:]*실패|사전 필터|하베스트 사전 필터|표본 검증 실패)\s*[:：]\s*", "", reason).strip()
+    if len(summary) > 80:
+        summary = summary[:78].rstrip() + "…"
+    return kind, summary
+
+
+def ensure_drop_info(board):
+    """Drop 카드마다 사유 유형·한 줄 요약을 붙인다. 사람이 --why로 정한 것은 바꾸지 않는다."""
+    for i in board["ideas"]:
+        if i["stage"] != "dropped":
+            continue
+        d = i.get("drop") or {}
+        if d.get("manual"):
+            continue
+        reason = drop_reason_text(i)
+        if d.get("from") == reason and d.get("type"):
+            continue
+        kind, summary = classify_drop(i)
+        i["drop"] = {"type": kind, "summary": summary, "from": reason, "manual": False}
+
+
 def save(path, board):
     """Write atomically and bump rev so a stale dashboard can't overwrite newer changes."""
+    ensure_drop_info(board)
     validate(board)
     board["rev"] = int(board.get("rev", 0)) + 1
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -309,6 +381,8 @@ def cmd_move(args):
             sys.exit("될놈 관문 미통과: " + ", ".join(bad) + " — LAB gate <id>로 확인, 또는 --force")
     from_stage = idea["stage"]
     idea["stage"] = args.stage
+    if args.stage == "dropped" and getattr(args, "why", None):
+        idea["drop"] = {"type": args.why, "summary": (args.reason or "")[:80], "from": args.reason or "", "manual": True}
     if args.priority is not None:
         idea["priority"] = args.priority
     if args.stage == "review":
@@ -369,9 +443,18 @@ def cmd_edit(args):
     if not changes:
         sys.exit("바꿀 항목(--title/--p/--s)이 없습니다")
     idea.update(changes)
-    log(idea, idea["stage"], idea["stage"], None, f"{', '.join(changes)} 수정: {args.reason}")
+    note = ""
+    if "title" in changes or "s_code" in changes:
+        # 범위·해결책이 바뀌면 경쟁 집합도 바뀐다(실측: i390을 여러 나라로 넓히자 Shopify Managed Markets·Passport가 새 경쟁자로 등장)
+        g = idea.setdefault("gate", {})
+        if (g.get("compete") or {}).get("v") == "pass":
+            g["compete"] = {"v": "unknown", "note": "범위 수정으로 경쟁 재확인 필요", "at": now()}
+        if (idea.get("verified") or {}).get("ok"):
+            idea["verified"] = {"ok": False, "note": "범위 수정으로 표본 검증 다시 필요", "at": now()}
+        note = " — 경쟁·표본 검증 초기화(다시 확인)"
+    log(idea, idea["stage"], idea["stage"], None, f"{', '.join(changes)} 수정: {args.reason}{note}")
     save(path, board)
-    print(f"{idea['id']}: {', '.join(changes)} 수정")
+    print(f"{idea['id']}: {', '.join(changes)} 수정{note}")
     return 0
 
 
@@ -480,7 +563,7 @@ GATE_KEYS = {
     "compete": "기능 문장 검색 6회 이상(한·영) + 경쟁표, 같은 대상에게 무료·저가로 푸는 제품 없음",
     "pain": "이해관계 없는 불편 원문 3건 이상(24개월 이내, 로그인 출처 포함)",
     "pay": "같은 대상이 지금 이 문제에 돈을 낸다(가격·단위·출처)",
-    "math": "월 300만 원 수익 계산 + 첫 고객 도달 경로(채널·도달 가능 수)",
+    "math": "월 300만 원 수익 계산 + 첫 고객 도달 경로 — 채널 URL과 실제 규모(회원 수·방문자)를 확인해 note에 적는다",
     "build": "1인 바이브코딩으로 4주 안에 MVP 가능, 필수 API·제휴가 막혀 있지 않음",
     "redteam": "레드팀 감사(죽일 근거 찾기)에서 kill이 아님",
 }
@@ -495,6 +578,9 @@ def cmd_gate(args):
     """될놈 관문: 4단계에 들어가려면 여섯 항목이 모두 pass여야 한다(평균 점수만으로는 못 들어간다)."""
     path = board_path(args)
     board = load(path)
+    members = [i for i in board["ideas"] if i.get("bundle") == args.id and i["stage"] != "dropped"]
+    if members and not any(i["id"] == args.id for i in board["ideas"]):
+        return bundle_gate(args.id, members)
     idea = find(board, args.id)
     g = idea.setdefault("gate", {})
     for kv in args.set or []:
@@ -515,6 +601,24 @@ def cmd_gate(args):
     return 0
 
 
+def bundle_gate(name, members):
+    """묶음 관문: 핵심(가장 앞선 단계·관문 통과가 많은 것)은 6항목 전부, 부가 아이디어는 compete·build만 통과하면 핵심의 부가 기능으로 싣는다.
+    pain·pay는 같은 고객이라 묶음 전체의 증거를 합쳐 본다."""
+    order = {"filtering": 0, "review": 0, "done": 0, "brainstorming": 1}
+    def ok(i, k): return ((i.get("gate") or {}).get(k) or {}).get("v") == "pass"
+    members = sorted(members, key=lambda i: (order.get(i["stage"], 2), -sum(ok(i, k) for k in GATE_KEYS)))
+    core, extras = members[0], members[1:]
+    print(f"묶음 '{name}' — 핵심 {core['id']} {core['title']}")
+    for k in GATE_KEYS:
+        pooled = k in ("pain", "pay") and any(ok(i, k) for i in members)
+        mark = "✓" if ok(core, k) or pooled else "✗"
+        print(f"  {mark} {k:8}" + ("  (묶음 증거 합산)" if pooled and not ok(core, k) else ""))
+    for e in extras:
+        fit = ok(e, "compete") and ok(e, "build")
+        print(f"  부가 {e['id']} {e['title'][:30]} — {'실을 수 있음' if fit else '미확정(compete·build 확인 필요)'}")
+    return 0
+
+
 def cmd_audit(args):
     """레드팀 감사 결과(.jsonl)를 반영: 경쟁·불편·지불·레드팀 네 항목을 증거 개수로 자동 판정한다."""
     path = board_path(args)
@@ -528,7 +632,12 @@ def cmd_audit(args):
         solved = [c["name"] for c in comps if c.get("solves") == "yes"]
         g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and not solved else "fail",
                         "note": (f"푸는 제품: {', '.join(solved)}" if solved else f"검색 {len(r.get('queries') or [])}회, 완전 대체 없음"), "at": now()}
-        g["pain"] = {"v": "pass" if len(quotes) >= 3 else "fail", "note": f"독립 원문 {len(quotes)}건", "at": now()}
+        prev_pain = g.get("pain") or {}
+        if prev_pain.get("v") == "pass" and "로그인" in (prev_pain.get("note") or "") and len(quotes) < 3:
+            # 메인이 로그인 출처로 채운 원문은 감사원(공개 검색만 가능)이 못 본다 — 덮어쓰지 않는다
+            prev_pain["note"] = prev_pain.get("note", "") + f" (감사 공개 검색 원문 {len(quotes)}건, 로그인 확인 유지)"
+        else:
+            g["pain"] = {"v": "pass" if len(quotes) >= 3 else "fail", "note": f"독립 원문 {len(quotes)}건", "at": now()}
         g["pay"] = {"v": "pass" if r.get("pay_evidence") else "fail", "note": f"지불 증거 {len(r.get('pay_evidence') or [])}건", "at": now()}
         g["redteam"] = {"v": "fail" if r.get("verdict") == "kill" else "pass", "note": f"{r.get('verdict')}: {r.get('reason', '')}", "at": now()}
         idea["audit"] = r
@@ -665,12 +774,52 @@ def cmd_gated(args):
     return 0
 
 
+def cmd_drops(args):
+    """Drop을 사유 유형별로 요약: `LAB drops`(유형별 개수) / `--type weak_evidence`(목록) / `--md`(lab/drops.md)"""
+    path = board_path(args)
+    board = load(path)
+    ensure_drop_info(board)
+    drops = [i for i in board["ideas"] if i["stage"] == "dropped"]
+    groups = {k: [] for k in DROP_TYPES}
+    for i in drops:
+        groups.setdefault(i["drop"]["type"], []).append(i)
+    if args.md:
+        out = ["# Drop 사유 정리", "", f"총 {len(drops)}개 · 자동 분류(`LAB move .. dropped --why <유형>`으로 바로잡을 수 있음)", "",
+               "| 유형 | 개수 | 다시 볼 가치 |", "|---|---|---|"]
+        revisit = {"weak_evidence": "있음 — 로그인 출처로 원문을 채우면 살아날 수 있음", "small_market": "피벗 시", "other": "확인 필요"}
+        for k, label in DROP_TYPES.items():
+            if groups.get(k):
+                out.append(f"| {label} | {len(groups[k])} | {revisit.get(k, '낮음')} |")
+        for k, label in DROP_TYPES.items():
+            if not groups.get(k):
+                continue
+            out += ["", f"## {label} ({len(groups[k])})", "", "| id | 제목 | 이유 한 줄 |", "|---|---|---|"]
+            for i in sorted(groups[k], key=lambda x: x["id"]):
+                out.append(f"| {i['id']} | {i['title'][:40]} | {i['drop']['summary'].replace('|', '/')} |")
+        target = path.parent / "drops.md"
+        target.write_text("\n".join(out) + "\n", encoding="utf-8")
+        save(path, board)
+        print(f"{target} 작성 ({len(drops)}개)")
+        return 0
+    if args.type:
+        for i in sorted(groups.get(args.type, []), key=lambda x: x["id"])[: args.limit]:
+            print(f"{i['id']}  {i['title'][:36]}\n      → {i['drop']['summary']}")
+        return 0
+    print(f"Drop {len(drops)}개 — 사유 유형별")
+    for k, label in DROP_TYPES.items():
+        if groups.get(k):
+            print(f"  {len(groups[k]):4}  {label}  ({k})")
+    save(path, board)
+    return 0
+
+
 def rank_key(i):
     s = i.get("scores", {})
     vals = [s.get(k) for k in ("need", "revenue", "tenx", "dist")]
     vals = [v for v in vals if v is not None]
     avg = sum(vals) / len(vals) if vals else 0
-    return (-round(avg, 3), -(s.get("fit") or 0), i["id"])
+    gate_ok = sum(1 for k in GATE_KEYS if ((i.get("gate") or {}).get(k) or {}).get("v") == "pass")
+    return (-round(avg, 3), -gate_ok, -(s.get("fit") or 0), i["id"])
 
 
 def cmd_rank(args):
@@ -737,6 +886,16 @@ def cmd_exceptions(args):
     for r in rows:
         print(f"{r[0]:<6} {r[1]!s:>4} {r[2]!s:>3} {r[3]!s:>3}  {r[4]}" + (f"\n       → {r[5][:120]}" if r[5] else ""))
     print(f"\n{len(rows)}개. 살리려면: LAB move <id> brainstorming --reason '사용자 예외 승인: ..' 또는 피벗이면 LAB add --from <id>")
+    if getattr(args, "md", False):
+        path = board_path(args)
+        out = ["# 규칙 예외 후보 — 사용자 결정", "",
+               "수익성·필요성 2 이하라 규칙상 Drop됐지만 조사원이 살릴 만하다고 본 것. '결정' 칸에 살림/피벗/버림을 적어 주면 메인이 반영한다.", "",
+               "| id | need | rev | fit | 제목 | 피벗안 | 결정 |", "|---|---|---|---|---|---|---|"]
+        for r in rows:
+            out.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[4][:30]} | {r[5][:90].replace('|', '/')} |  |")
+        target = path.parent / "exceptions.md"
+        target.write_text("\n".join(out) + "\n", encoding="utf-8")
+        print(f"{target} 작성")
     return 0
 
 
@@ -769,6 +928,8 @@ def cmd_stats(args):
     board = load(board_path(args))
     if args.tags:
         return stats_by_tag(board, args.min)
+    if args.stages:
+        return stats_by_stage(board)
     rows = {}
     for i in board["ideas"]:
         src = i.get("source") or "직접 추가"
@@ -790,6 +951,36 @@ def cmd_stats(args):
     for src, r in sorted(rows.items(), key=lambda kv: -kv[1]["후보"]):
         passed = r["3단계"] + r["4단계+"]
         print(f"{src:<16}" + "".join(f"{r[c]:>8}" for c in cols) + f"   {passed / r['후보']:.0%}")
+    return 0
+
+
+def stats_by_stage(board):
+    """단계별 정확도: 하베스터가 통과시킨 것 중 메인 선검증·조사·감사에서 몇 개가 틀렸나(출처별)."""
+    rows = {}
+    for i in board["ideas"]:
+        src = i.get("source") or "직접 추가"
+        r = rows.setdefault(src, {"후보": 0, "하베스터통과": 0, "선검증탈락": 0, "조사탈락": 0, "감사·관문탈락": 0, "생존": 0})
+        r["후보"] += 1
+        reasons = [str(l.get("reason", "")) for l in i.get("log", [])]
+        if any(x.startswith("사전 필터") for x in reasons):
+            continue
+        r["하베스터통과"] += 1
+        vnote = str((i.get("verified") or {}).get("note", ""))
+        if (i.get("verified") or {}).get("ok") is False and ("선검증" in vnote or "보류" in vnote):
+            r["선검증탈락"] += 1
+        elif i["stage"] == "dropped" and any(x.startswith(("레드팀", "관문", "될놈 관문")) for x in reasons):
+            r["감사·관문탈락"] += 1
+        elif i["stage"] == "dropped":
+            r["조사탈락"] += 1
+        else:
+            r["생존"] += 1
+    cols = ["후보", "하베스터통과", "선검증탈락", "조사탈락", "감사·관문탈락", "생존"]
+    print(f"{'출처':<16}" + "".join(f"{c:>10}" for c in cols) + "  하베스터 오판율")
+    for src, r in sorted(rows.items(), key=lambda kv: -kv[1]["후보"]):
+        wrong = r["선검증탈락"] + r["조사탈락"] + r["감사·관문탈락"]
+        rate = f"{wrong / r['하베스터통과']:.0%}" if r["하베스터통과"] else "-"
+        print(f"{src:<16}" + "".join(f"{r[c]:>10}" for c in cols) + f"  {rate}")
+    print("\n하베스터 오판율 = 하베스터가 통과시킨 것 중 메인 선검증·조사·감사에서 떨어진 비율. 높은 출처는 선검증을 더 엄하게")
     return 0
 
 
@@ -826,7 +1017,14 @@ def cmd_apply(args):
     applied = dropped = 0
     for r in rows:
         idea = next((i for i in board["ideas"] if i["id"] == r.get("id")), None)
-        if not idea or idea["stage"] != "brainstorming":
+        if not idea:
+            continue
+        if idea["stage"] in ("ideation", "incubating") and idea.get("hold"):
+            # 보류 후보를 조사원에게 바로 보낸 경우: 조사 결과가 곧 빈틈 확인이므로 3단계로 올려 반영한다
+            log(idea, idea["stage"], "brainstorming", "go", "보류 후보 조사 결과 반영")
+            idea["stage"] = "brainstorming"
+        if idea["stage"] != "brainstorming":
+            print(f"  건너뜀 {idea['id']}: 단계가 {idea['stage']}(3단계가 아님)")
             continue
         idea.setdefault("scores", {}).update(
             {k: clamp_score(r[k]) for k in ("need", "revenue", "tenx", "dist", "fit") if r.get(k) is not None})
@@ -1057,6 +1255,7 @@ def main():
     p.add_argument("--reason", required=True, help="why (evidence, one line)")
     p.add_argument("--priority", type=int)
     p.add_argument("--force", action="store_true", help="ignore the parallel limit / missing scores")
+    p.add_argument("--why", choices=list(DROP_TYPES), help="Drop 사유 유형(생략하면 자동 분류)")
     p.set_defaults(func=cmd_move)
 
     p = sub.add_parser("score")
@@ -1102,8 +1301,11 @@ def main():
     p = sub.add_parser("stats")
     p.add_argument("--tags", action="store_true", help="saturation map by tag instead of by source")
     p.add_argument("--min", type=int, default=3, help="hide tags with fewer candidates")
+    p.add_argument("--stages", action="store_true")
     p.set_defaults(func=cmd_stats)
-    sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
+    p = sub.add_parser("exceptions")
+    p.add_argument("--md", action="store_true")
+    p.set_defaults(func=cmd_exceptions)
     sub.add_parser("pending").set_defaults(func=cmd_pending)
 
     p = sub.add_parser("gated")
@@ -1125,6 +1327,12 @@ def main():
     p.add_argument("--remove", action="store_true")
     p.add_argument("--reason")
     p.set_defaults(func=cmd_bundle)
+
+    p = sub.add_parser("drops")
+    p.add_argument("--type", choices=list(DROP_TYPES))
+    p.add_argument("--limit", type=int, default=200)
+    p.add_argument("--md", action="store_true")
+    p.set_defaults(func=cmd_drops)
 
     p = sub.add_parser("gate")
     p.add_argument("id")

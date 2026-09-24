@@ -14,7 +14,7 @@
 ## 추가·편집
 - `LAB add --title .. --p .. --s .. [--from <원래 id>] [--tags B2B,외식]`
 - `LAB import <harvest 파일(.json/.jsonl)>` — 하베스트 후보 일괄 추가. 비슷한 제목은 건너뜀, 신호가 있으면 2단계 통과, `prefilter: "drop: .."`는 Drop 기록, 출처·신호는 필드로 보존
-- `LAB edit <id> [--title ..] [--p ..] [--s ..] --reason ".."` — 같은 아이디어 안에서 타깃·포지션을 좁힐 때(완전히 바뀌면 피벗)
+- `LAB edit <id> [--title ..] [--p ..] [--s ..] --reason ".."` — 같은 아이디어 안에서 타깃·포지션을 좁힐 때(완전히 바뀌면 피벗). 제목·해결책을 바꾸면 관문 compete와 표본 검증이 초기화된다 → 경쟁 검색을 다시 한다
 - `LAB note <id> --text ".."` 또는 `--file <파일>` — 카드 메모(조사 요약 5~8줄)
 - `LAB bundle <이름> <id> <id> --reason ".."` / `LAB bundle --remove <id>` — 같은 고객·같은 엔진 묶음
 - `LAB set key=value ..` — `founder`, `analytics`, `ga4_id`, `fdt_capacity`(0=제한 없음), `fdt_go_rate` 등
@@ -22,6 +22,10 @@
 ## 판정
 - `LAB score <id> need=.. revenue=.. tenx=.. dist=.. fit=..` / `LAB score <id> --prelim easy=.. moat=.. scale=..`
 - `LAB apply <resultN.json 또는 .jsonl>` — 조사 결과 일괄 반영(점수·가안·메모·수익 계산, need/revenue ≤ 2 자동 Drop, pass이거나 근거 있는 pivot만 예외 후보)
+- `LAB drops [--type <유형>] [--md]` — Drop 사유 유형별 개수·목록, `--md`면 `lab/drops.md`(유형별 id·제목·이유 한 줄). 유형: merged·cant_build·legal·solved_free·competitor·one_off·small_market·weak_evidence·no_pain·other. Drop할 때 `LAB move <id> dropped --why <유형>`으로 직접 지정(생략하면 이유 문장으로 자동 분류)
+- `LAB stats --stages` — 출처별 단계 정확도(하베스터 통과 → 선검증·조사·감사 탈락 → 생존, 하베스터 오판율)
+- `LAB exceptions --md` — 예외 후보를 `lab/exceptions.md` 결정표로(사용자가 살림/피벗/버림 기입)
+- `LAB gate <묶음 이름>` — 묶음 관문: 핵심은 6항목 전부, pain·pay는 묶음 증거 합산, 부가 아이디어는 compete·build만 통과하면 핵심의 부가 기능으로
 - `LAB gate <id> [--set compete=pass pain=fail ..] [--note ..]` — 될놈 관문 6항목 보기·기록. 4단계 이동은 전부 pass여야 함
 - `LAB audit <audit.jsonl>` — 레드팀 감사 결과 반영(compete·pain·pay·redteam 자동 판정, 메인이 같은 대상 기준으로 재확인)
 - `LAB verify <id> --ok|--fail --note ".."` — 메인의 표본 검증 기록(4단계 이동에 필요)

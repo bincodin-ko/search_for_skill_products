@@ -26,3 +26,9 @@
   - 앱이 켜져 있어야 MCP가 동작하는지: 문서에 없음(확인 필요)
   - **앱을 설치해도 CLI(`aside` 명령)는 따로 설치해야 한다**(2026-09-24 확인: 앱은 `C:\Program Files\Aside`에 있었지만 `aside` 명령이 없었다). 가장 쉬운 방법은 Aside 앱의 개발자 설정 페이지에서 CLI 설치. 공식 PowerShell 설치 스크립트도 있다(서명 검증 포함). 설치 후 새 터미널을 열어야 PATH가 잡힌다
   - **연결 확인됨(2026-09-24, Windows, CLI 1.26.916.1741):** CLI 위치 `%LOCALAPPDATA%\Aside\CLI\current\aside.exe`. PATH가 반영되기 전인 창에서도 되도록 전체 경로로 등록: `claude mcp add --scope user aside -- "C:\Users\<사용자>\AppData\Local\Aside\CLI\current\aside.exe" mcp` → `claude mcp list`에서 `✔ Connected`. Aside 도구는 Claude를 **재시작해야** 세션에 나타난다
+
+
+## WebSearch 세션 한도가 서브에이전트와 공유된다 (2026-09-24)
+- 증상: "this session has used its web search budget (1000 of 1000)". 하베스터·리서처 서브에이전트의 검색도 같은 세션 한도에서 빠진다(하베스터 1명 ≈ 50~60회)
+- 해결: `~/.claude/settings.json` env `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION` 값을 올리고 Claude Code를 다시 시작(`claude --resume`). 사용자 확인 후에만
+- 재시작 전 임시 대안: 메인이 Aside로 네이버 검색(`search.naver.com/search.naver?query=`) — 동작함. WebFetch로 search.naver.com은 차단, Bing은 한국어·민감 주제 질의 결과가 엉뚱함, Brave는 반복 요청 시 429
