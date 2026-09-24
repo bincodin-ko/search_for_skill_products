@@ -64,6 +64,9 @@ SHORT_LABELS = {
 }
 ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]
+MARKETS = ["kr", "global", "both"]  # global/both는 대시보드에 🌍 해외 표시
+NEED_TYPES = ["pain", "want"]  # need = 고통(불편·손실) 또는 욕망(재미·자랑·관계·호기심)
+REVENUE_MODELS = ["subscription", "success_fee", "transaction", "lead", "one_time", "ads", "other"]
 SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]
 # fame = 무료라도 유명해져 돈이 되는 길(광고·파생 유료 제품·제휴·인수·홍보 채널). 수익성은 max(revenue, fame)로 본다
 # need <= 2 또는 수익성(max(revenue, fame)) <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
@@ -313,6 +316,7 @@ def cmd_add(args):
         "notes": args.notes or "",
         "parent": args.parent,
         "tags": [t.strip() for t in (args.tags or "").split(",") if t.strip()],
+        "market": args.market or "kr",
         "log": [],
         "created_at": now(),
         "updated_at": now(),
@@ -349,8 +353,11 @@ def cmd_list(args):
                 extra += f"  ←{i['parent']}"
             if i.get("bundle"):
                 extra += f"  [묶음:{i['bundle']}]"
+            if i.get("market") in ("global", "both"):
+                extra += "  🌍해외"
             if i.get("hold") and i["stage"] == "ideation":
-                extra += "  [보류: 빈틈 증거 확인 필요]"
+                h = str(i["hold"])
+                extra += f"  [{h[:60]}]" if h.startswith("타이밍 대기") else "  [보류: 빈틈 증거 확인 필요]"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
     cap = board["settings"]["fdt_capacity"]
     print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}" + (f"/{cap}" if cap else ""))
@@ -443,6 +450,17 @@ def cmd_note(args):
     idea["updated_at"] = now()
     save(path, board)
     print(f"{idea['id']}: 메모 {len(idea['notes'])}자 저장")
+    return 0
+
+
+def cmd_market(args):
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    idea["market"] = args.value
+    idea["updated_at"] = now()
+    save(path, board)
+    print(f"{idea['id']}: market = {args.value}")
     return 0
 
 
@@ -561,8 +579,16 @@ def cmd_import(args):
             "source": str(r.get("source", "")).strip(),
             "signal": signal, "signal_url": url,
             "tags": [str(t).strip() for t in r.get("tags", []) if str(t).strip()],
+            "market": r.get("market") if r.get("market") in MARKETS else "kr",
             "log": [], "created_at": now(), "updated_at": now(), "next_review": None,
         }
+        if r.get("need_type") in NEED_TYPES:
+            idea["need_type"] = r["need_type"]
+        if r.get("behavior_signal"):
+            idea["notes"] += f"\n행동 증거(출처 신호): {r['behavior_signal']}"
+        if r.get("why_now"):
+            idea["why_now"] = str(r["why_now"])
+            idea["notes"] += f"\n왜 지금(출처 신호): {r['why_now']}"
         board["ideas"].append(idea)
         idea["_imported_now"] = True
         added += 1
@@ -660,15 +686,24 @@ def cmd_audit(args):
         quotes = [q for q in r.get("pain_quotes") or [] if q.get("independent", True)]
         g = idea.setdefault("gate", {})
         solved = [c["name"] for c in comps if c.get("solves") == "yes"]
-        g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and not solved else "fail",
-                        "note": (f"푸는 제품: {', '.join(solved)}" if solved else f"검색 {len(r.get('queries') or [])}회, 완전 대체 없음"), "at": now()}
+        # beatable = 같은 대상에게 이미 팔지만 비싸거나 1~2점 리뷰 불만이 반복되는 유료 제품 → 이길 틈(시장 증거), fail 아님
+        beat = [c["name"] for c in comps if c.get("solves") == "beatable" and c.get("weakness")]
+        note = (f"푸는 제품: {', '.join(solved)}" if solved else f"검색 {len(r.get('queries') or [])}회, 완전 대체 없음")
+        if beat:
+            note += f" · 이길 틈 있는 유료 경쟁: {', '.join(beat)}"
+        g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and not solved else "fail", "note": note, "at": now()}
         prev_pain = g.get("pain") or {}
         if prev_pain.get("v") == "pass" and "로그인" in (prev_pain.get("note") or "") and len(quotes) < 3:
             # 메인이 로그인 출처로 채운 원문은 감사원(공개 검색만 가능)이 못 본다 — 덮어쓰지 않는다
             prev_pain["note"] = prev_pain.get("note", "") + f" (감사 공개 검색 원문 {len(quotes)}건, 로그인 확인 유지)"
         else:
-            g["pain"] = {"v": "pass" if len(quotes) >= 3 else "fail", "note": f"독립 원문 {len(quotes)}건", "at": now()}
-        g["pay"] = {"v": "pass" if r.get("pay_evidence") else "fail", "note": f"지불 증거 {len(r.get('pay_evidence') or [])}건", "at": now()}
+            beh = r.get("behavior_evidence") or []
+            want = (idea.get("need_type") or r.get("need_type")) == "want"
+            ok = len(quotes) >= 3 or (len(quotes) >= 1 and len(beh) >= 2) or (want and len(beh) >= 3)
+            g["pain"] = {"v": "pass" if ok else "fail", "note": f"독립 원문 {len(quotes)}건 · 행동 증거 {len(beh)}건" + (" (욕망형)" if want else ""), "at": now()}
+        pay, fame_ev = r.get("pay_evidence") or [], r.get("fame_evidence") or []
+        g["pay"] = {"v": "pass" if pay or fame_ev else "fail",
+                    "note": f"지불 증거 {len(pay)}건" + (f" · 유명세 선례 {len(fame_ev)}건" if fame_ev else ""), "at": now()}
         g["redteam"] = {"v": "fail" if r.get("verdict") == "kill" else "pass", "note": f"{r.get('verdict')}: {r.get('reason', '')}", "at": now()}
         idea["audit"] = r
         if r.get("login_sources"):
@@ -1075,10 +1110,22 @@ def cmd_apply(args):
         kept = [l for l in str(idea.get("notes", "")).splitlines() if "출처 신호" in l or l.startswith("http")]
         idea["notes"] = "\n".join(x for x in note + kept if x)
         idea["research_verdict"] = r.get("verdict", "")
+        for k, allowed in (("need_type", NEED_TYPES), ("market", MARKETS)):
+            if r.get(k) in allowed:
+                idea[k] = r[k]
+        if r.get("ops"):
+            idea["ops"] = r["ops"]  # 1인 운영 부담: {"hours_month":..,"human_work":"..","automatable":..}
+            idea["notes"] += f"\n운영 부담: 월 {r['ops'].get('hours_month', '?')}시간 · {r['ops'].get('human_work', '')}"
+        if r.get("why_now"):
+            idea["why_now"] = str(r["why_now"])
+            idea["notes"] += f"\n왜 지금: {r['why_now']}"
         rm = r.get("revenue_math")
         if isinstance(rm, dict) and rm:
             idea["revenue_math"] = rm
-            idea["notes"] += (f"\n수익 계산: 가격 {rm.get('price', '?')} × 필요 고객 {rm.get('customers_needed', '?')}"
+            model = rm.get("model", "subscription")
+            if model not in REVENUE_MODELS:
+                print(f"⚠ {idea['id']}: revenue_math.model '{model}'은 {REVENUE_MODELS} 중 하나여야 합니다")
+            idea["notes"] += (f"\n수익 계산({model}): {rm.get('formula') or ('가격 ' + str(rm.get('price', '?')) + ' × 필요 고객 ' + str(rm.get('customers_needed', '?')))}"
                               f" = 월 300만 원 · 근거: {rm.get('basis', '')}")
         elif idea["scores"].get("revenue", 0) >= 3:
             print(f"⚠ {idea['id']}: revenue {idea['scores']['revenue']}인데 revenue_math가 없습니다(조사원에게 보완 요청)")
@@ -1092,6 +1139,14 @@ def cmd_apply(args):
         idea["updated_at"] = now()
         applied += 1
         sc = idea["scores"]
+        if r.get("verdict") == "wait" and r.get("why_now"):
+            # 타이밍 대기: 막 열리는 시장이라 지금은 증거가 얇다 — 버리지 않고 재검토 날짜와 함께 1단계 보류
+            when = str(r.get("revisit") or (dt.date.today() + dt.timedelta(days=60)).isoformat())
+            idea["hold"] = f"타이밍 대기 — {r['why_now']} (재검토 {when})"
+            idea["next_review"] = when
+            log(idea, "brainstorming", "ideation", "hold", "타이밍 대기: " + str(r.get("reason", ""))[:300])
+            idea["stage"] = "ideation"
+            continue
         if sc.get("need", 5) <= 2 or (money(sc) or 5) <= 2:
             reason = f"조사: {r.get('reason', '')}"
             if r.get("pivot"):
@@ -1280,7 +1335,13 @@ def main():
     p.add_argument("--notes")
     p.add_argument("--from", dest="parent", help="id of the idea this one pivots from")
     p.add_argument("--tags", help="comma-separated tags, e.g. B2B,자영업")
+    p.add_argument("--market", choices=MARKETS, help="kr(한국) | global(해외) | both")
     p.set_defaults(func=cmd_add)
+
+    p = sub.add_parser("market", help="시장 표시 바꾸기: kr | global | both (대시보드 🌍 표시)")
+    p.add_argument("id")
+    p.add_argument("value", choices=MARKETS)
+    p.set_defaults(func=cmd_market)
 
     p = sub.add_parser("list")
     p.add_argument("--stage", choices=STAGES)
