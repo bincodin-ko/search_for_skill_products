@@ -17,7 +17,7 @@ in lab/ideas/<id>.md.
   gate ID [--set k=pass ..]     the 6-item stage-4 gate (compete pain pay math build redteam)
   audit FILE                    apply red-team audit results (.jsonl) to the gate
   gated [--all]                 ideas whose research left login-gated sources; default = only ones login data could still change
-  rank [--apply]                rank scored ideas (avg need·revenue·tenx·dist, then fit); --apply sets stage-4 priorities
+  rank [--apply]                rank scored ideas (avg need·max(revenue,fame)·tenx·dist, then fit); --apply sets stage-4 priorities
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
   bundle --remove ID..          take ideas out of their bundle
   list [--stage S]              show ideas grouped by stage, with scores
@@ -64,8 +64,9 @@ SHORT_LABELS = {
 }
 ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]
-SCORE_KEYS = ["need", "revenue", "tenx", "dist", "fit", "easy", "moat", "scale"]
-# need/revenue <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
+SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]
+# fame = 무료라도 유명해져 돈이 되는 길(광고·파생 유료 제품·제휴·인수·홍보 채널). 수익성은 max(revenue, fame)로 본다
+# need <= 2 또는 수익성(max(revenue, fame)) <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
 DEFAULT_SETTINGS = {
     "max_parallel": 10,
     "fdt_min_visits": 200,
@@ -163,7 +164,7 @@ def classify_drop(idea):
         sc = idea.get("scores") or {}
         if (sc.get("need") or 5) <= 2:
             kind = "no_pain"
-        elif (sc.get("revenue") or 5) <= 2:
+        elif (money(sc) or 5) <= 2:
             kind = "small_market"
         else:
             kind = "other"
@@ -428,8 +429,8 @@ def cmd_score(args):
     save(path, board)
     print(f"{field}: {json.dumps(target, ensure_ascii=False)}")
     s = idea.get("scores", {})
-    if not args.prelim and (s.get("need", 5) <= 2 or s.get("revenue", 5) <= 2):
-        print("⚠ need 또는 revenue ≤ 2 → 3단계 자동 Drop 대상")
+    if not args.prelim and (s.get("need", 5) <= 2 or (money(s) or 5) <= 2):
+        print("⚠ need ≤ 2 또는 수익성(max(revenue, fame)) ≤ 2 → 3단계 자동 Drop 대상")
     return 0
 
 
@@ -550,6 +551,8 @@ def cmd_import(args):
             note += f"\n지불 증거(출처 신호): {r['pay_signal']}"
         if r.get("gap_signal"):
             note += f"\n빈틈 증거(출처 신호): {r['gap_signal']}"
+        if r.get("fame_signal"):
+            note += f"\n유명세 경로(출처 신호): {r['fame_signal']}"
         idea = {
             "id": next_id(board), "title": title,
             "p_code": str(r.get("p", "")).strip(), "s_code": str(r.get("s", "")).strip(),
@@ -590,7 +593,7 @@ GATE_KEYS = {
     "compete": "기능 문장 검색 6회 이상(한·영) + 경쟁표, 같은 대상에게 무료·저가로 푸는 제품 없음",
     "pain": "이해관계 없는 불편 원문 3건 이상(24개월 이내, 로그인 출처 포함)",
     "pay": "같은 대상이 지금 이 문제에 돈을 낸다(가격·단위·출처)",
-    "math": "월 300만 원 수익 계산 + 첫 고객 도달 경로 — 채널 URL과 실제 규모(회원 수·방문자)를 확인해 note에 적는다",
+    "math": "두 길 중 하나: A 직접 수익(월 300만 원 계산) 또는 B 유명세(1년 도달 목표 근거 + 수익 전환 길 2개 이상 선례 + 월 운영비) — 어느 쪽이든 첫 사용자 도달 채널 URL과 실제 규모(회원 수·방문자)를 note에 적는다",
     "build": "1인 바이브코딩으로 4주 안에 MVP 가능, 필수 API·제휴가 막혀 있지 않음",
     "redteam": "레드팀 감사(죽일 근거 찾기)에서 kill이 아님",
 }
@@ -840,9 +843,16 @@ def cmd_drops(args):
     return 0
 
 
+def money(s):
+    """수익성 = 직접 수익(revenue)과 유명세 경로(fame) 중 높은 쪽. fame이 없으면 revenue."""
+    r, f = s.get("revenue"), s.get("fame")
+    vals = [v for v in (r, f) if v is not None]
+    return max(vals) if vals else None
+
+
 def rank_key(i):
     s = i.get("scores", {})
-    vals = [s.get(k) for k in ("need", "revenue", "tenx", "dist")]
+    vals = [s.get("need"), money(s), s.get("tenx"), s.get("dist")]
     vals = [v for v in vals if v is not None]
     avg = sum(vals) / len(vals) if vals else 0
     gate_ok = sum(1 for k in GATE_KEYS if ((i.get("gate") or {}).get(k) or {}).get("v") == "pass")
@@ -872,8 +882,8 @@ def cmd_rank(args):
         print(f"\n## 3단계 대기 중 4단계로 올릴 만한 것 (빈자리 {free}개)")
         better = better[: max(free, 3)]
     else:
-        # 자리 제한 없음: 규칙(need·revenue ≥ 3)을 통과한 3단계 아이디어는 모두 후보, 표본 검증이 관문
-        better = [i for i in b if min(i["scores"].get("need", 0), i["scores"].get("revenue", 0)) >= 3]
+        # 자리 제한 없음: 규칙(need·수익성 ≥ 3)을 통과한 3단계 아이디어는 모두 후보, 표본 검증이 관문
+        better = [i for i in b if min(i["scores"].get("need", 0), money(i["scores"]) or 0) >= 3]
         print("\n## 3단계 대기 (자리 제한 없음 — 표본 검증 + 될놈 관문 6항목이 관문)")
     for i in better:
         print(f"  {fmt(i)}")
@@ -1054,7 +1064,7 @@ def cmd_apply(args):
             print(f"  건너뜀 {idea['id']}: 단계가 {idea['stage']}(3단계가 아님)")
             continue
         idea.setdefault("scores", {}).update(
-            {k: clamp_score(r[k]) for k in ("need", "revenue", "tenx", "dist", "fit") if r.get(k) is not None})
+            {k: clamp_score(r[k]) for k in ("need", "revenue", "fame", "tenx", "dist", "fit") if r.get(k) is not None})
         idea.setdefault("prelim", {}).update(
             {k: clamp_score(r[k]) for k in ("easy", "moat", "scale") if r.get(k) is not None})
         note = [f"[3단계 조사 {dt.date.today().isoformat()}] 상세: lab/ideas/{idea['id']}.md", str(r.get("note", "")).strip()]
@@ -1072,10 +1082,17 @@ def cmd_apply(args):
                               f" = 월 300만 원 · 근거: {rm.get('basis', '')}")
         elif idea["scores"].get("revenue", 0) >= 3:
             print(f"⚠ {idea['id']}: revenue {idea['scores']['revenue']}인데 revenue_math가 없습니다(조사원에게 보완 요청)")
+        fm = r.get("fame_math")
+        if isinstance(fm, dict) and fm:
+            idea["fame_math"] = fm
+            idea["notes"] += (f"\n유명세 경로: 1년 목표 {fm.get('reach_goal', '?')} · 근거 {fm.get('basis', '')}"
+                              f" · 수익 전환 {', '.join(map(str, fm.get('monetize', [])))} · 월 운영비 {fm.get('run_cost', '?')}")
+        elif idea["scores"].get("fame", 0) >= 3:
+            print(f"⚠ {idea['id']}: fame {idea['scores']['fame']}인데 fame_math가 없습니다(조사원에게 보완 요청)")
         idea["updated_at"] = now()
         applied += 1
         sc = idea["scores"]
-        if sc.get("need", 5) <= 2 or sc.get("revenue", 5) <= 2:
+        if sc.get("need", 5) <= 2 or (money(sc) or 5) <= 2:
             reason = f"조사: {r.get('reason', '')}"
             if r.get("pivot"):
                 reason += f" · 피벗안: {r['pivot']}"

@@ -192,7 +192,7 @@ const QUESTION = {
   review: "독점 가능성과 확장 가능성이 있는가?",
 };
 const SCORE_KEYS = [
-  ["need", "필요성"], ["revenue", "수익성"], ["tenx", "10배 요소"], ["dist", "유통(첫 고객 도달)"], ["fit", "창업자 적합도"],
+  ["need", "필요성"], ["revenue", "수익성(유료 고객)"], ["fame", "유명세(무료로 퍼져 돈 되는 길)"], ["tenx", "10배 요소"], ["dist", "유통(첫 고객 도달)"], ["fit", "창업자 적합도"],
   ["easy", "따라 하기 어려움"], ["moat", "해자"], ["scale", "확장성"],
 ];
 let board = null;
@@ -206,8 +206,9 @@ const DROP_LABELS = {
 };
 try { Object.assign(view, JSON.parse(localStorage.getItem("labView") || "{}")); } catch (e) { /* 저장소를 못 쓰면 기본값 */ }
 const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ sort: view.sort, foldDrop: view.foldDrop })); } catch (e) {} };
-const AVG_KEYS = ["need", "revenue", "tenx", "dist"];
-const avgOf = (i) => { const v = AVG_KEYS.map((k) => i.scores?.[k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const AVG_KEYS = ["need", "money", "tenx", "dist"];
+const moneyOf = (s) => { const v = [s?.revenue, s?.fame].filter((x) => x != null); return v.length ? Math.max(...v) : null; };
+const avgOf = (i) => { const v = AVG_KEYS.map((k) => (k === "money" ? moneyOf(i.scores) : i.scores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, i.bundle || "", (i.tags || []).join(" ")].join(" ").toLowerCase().includes(view.q.toLowerCase());
 const sorters = {
   priority: (a, b) => (a.priority ?? 999) - (b.priority ?? 999) || (avgOf(b) ?? 0) - (avgOf(a) ?? 0),

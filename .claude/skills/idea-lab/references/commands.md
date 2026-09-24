@@ -20,7 +20,7 @@
 - `LAB set key=value ..` — `founder`, `analytics`, `ga4_id`, `fdt_capacity`(0=제한 없음), `fdt_go_rate` 등
 
 ## 판정
-- `LAB score <id> need=.. revenue=.. tenx=.. dist=.. fit=..` / `LAB score <id> --prelim easy=.. moat=.. scale=..`
+- `LAB score <id> need=.. revenue=.. fame=.. tenx=.. dist=.. fit=..` (수익성 = max(revenue, fame)) / `LAB score <id> --prelim easy=.. moat=.. scale=..`
 - `LAB apply <resultN.json 또는 .jsonl>` — 조사 결과 일괄 반영(점수·가안·메모·수익 계산, need/revenue ≤ 2 자동 Drop, pass이거나 근거 있는 pivot만 예외 후보)
 - `LAB drops [--type <유형>] [--md]` — Drop 사유 유형별 개수·목록, `--md`면 `lab/drops.md`(유형별 id·제목·이유 한 줄). 유형: merged·cant_build·legal·solved_free·competitor·one_off·small_market·weak_evidence·no_pain·other. Drop할 때 `LAB move <id> dropped --why <유형>`으로 직접 지정(생략하면 이유 문장으로 자동 분류)
 - `LAB stats --stages` — 출처별 단계 정확도(하베스터 통과 → 선검증·조사·감사 탈락 → 생존, 하베스터 오판율)
