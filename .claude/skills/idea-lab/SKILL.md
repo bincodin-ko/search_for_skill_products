@@ -30,9 +30,11 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
   - `LAB add --title .. --p .. --s .. [--from <원래 id>] [--tags B2B,자영업]` — 피벗이면 `--from`
   - `LAB import lab/batches/harvest_*.json` — 하베스트 후보를 한 번에 추가(비슷한 제목은 건너뜀, 신호가 있으면 2단계 통과, 사전 필터 drop 기록, 출처는 `source` 필드로 보존)
   - `LAB stats` — 출처(하베스터)별 통과율. 한 바퀴가 끝나면 보고 다음 하베스트의 비중을 정한다
+  - `LAB stats --tags [--min N]` — 업종(태그)별 시도·생존 수와 고갈 분야(탐색 공간 지도)
   - `LAB verify <id> --ok|--fail --note ".."` — 메인이 핵심 근거를 직접 열어 본 표본 검증 기록. 4단계로 올리려면 필요하다
   - `LAB exceptions` — 규칙 예외 후보와 피벗안 목록(한 바퀴 마무리 때 사용자 검토용)
   - `LAB pending` — 3단계에서 점수가 없는 아이디어와, 조사 파일만 남고 중단된 것 표시(중단 복구용)
+  - `LAB fdt-scaffold <id|묶음>` — FDT 랜딩페이지 뼈대 생성(템플릿: `templates/fdt.html`)
   - `LAB bundle <이름> <id> <id> --reason ".."` / `LAB bundle --remove <id>` — 같은 고객·같은 엔진을 쓰는 아이디어를 묶어 FDT 하나로 검증
   - `LAB edit <id> [--title ..] [--p ..] [--s ..] --reason ".."` — 조사를 보고 타깃·포지션을 좁힐 때(같은 아이디어 안에서의 조정. 타깃이 완전히 바뀌면 피벗)
   - `LAB move <id> <stage> --reason ".." [--verdict go|drop|hold|retry] [--priority N]`
@@ -159,6 +161,15 @@ resultN.json = [{"id":"i009","need":3,"revenue":2,"tenx":2,"dist":3,"fit":2,"eas
 - 이미 같은 서비스가 한국에 있는지 1~2회 검색으로 확인하고, 사전 필터에 걸리면 `prefilter: "drop: 이유"`로 적는다(목록에는 남긴다 — Drop 기록도 학습 자료다)
 - 출력: `lab/batches/harvest_<종류>.json` = `[{title, p, s, tags, source, signal, signal_url, pay_signal, gap_signal, prefilter}]`
 
+**마켓 목록 캐시 (하베스트·조사 전에 메인이 한다).** 카페24 앱스토어처럼 목록이 동적으로 로딩되는 마켓은 WebFetch로 보이지 않는다. 실측(2바퀴): 하베스터가 "빈틈"이라고 가져온 8개 중 5개가 실제로는 경쟁 앱이 있었고, i386은 조사원까지 통과한 뒤 표본 검증에서 월 5,000원대 리뷰 앱 4개가 발견돼 떨어졌다. 그래서:
+1. 메인이 Aside(`mcp__aside__repl`)로 대상 마켓의 관련 키워드 검색 목록을 열어 **앱 이름·가격·한 줄 설명**을 `lab/cache/<마켓>_<키워드>_<날짜>.txt`에 저장한다(목록 텍스트는 `document.body.innerText`에서 "정확도순"~"Family Site" 구간)
+2. 하베스터·조사원 프롬프트에 "`lab/cache/`의 해당 파일을 먼저 읽고, 거기 있는 앱과 겹치면 빈틈이 아니다"를 넣는다
+3. 캐시에 없는 키워드가 필요해지면 조사원은 "목록 확인 못 함"으로 적고, 메인이 표본 검증 때 Aside로 연다
+
+**하베스터 목표치.** 증거 세 개 규칙에서는 25개를 채우려다 한 명이 18만~28만 토큰을 쓰고도 3~15개만 냈다. 목표는 10~12개로 두고, 검색 약 40회 안에 못 채우면 그만큼만 내고 멈춘다.
+
+**탐색 공간 고갈.** `LAB stats --tags`로 업종별 시도·생존 수를 보고, 고갈된 업종(8개 이상 시도, 생존 0)은 `lab/batches/saturated.txt`에 적어 하베스터가 피하게 한다. 실측(385개 시점): 한국 소상공인·카페24 앱 쪽이 대부분 고갈됐다 → 해외 앱마켓 직접 진출(Shopify·크롬 웹스토어 등), 덜 판 업종으로 방향을 옮긴다.
+
 메인은 끝난 하베스트부터 `LAB import`로 넣는다. 비슷한 제목은 자동으로 건너뛰고, 신호가 없는 후보는 1단계에 남는다. 그다음 3단계 조사 배치를 만든다.
 
 ### 사전 필터 (조사 전에 1분)
@@ -243,7 +254,7 @@ resultN.json = [{"id":"i009","need":3,"revenue":2,"tenx":2,"dist":3,"fit":2,"eas
 **정량 검증: FDT (가짜 문 테스트)**
 0. 첫 FDT라면 설정을 한 번 묻는다: 분석 도구(GA4 추천 — 무료, 구글 계정만 있으면 됨 / Umami / Plausible)와 측정 ID. `LAB set analytics=ga4 ga4_id=G-..`로 저장하고 이후에는 다시 묻지 않는다
    - 페이지는 우선순위 순으로 만든다. 배포해서 방문자를 보내기 시작하면 `LAB fdt-start <id> --url ..`로 표시한다
-1. `lab/fdt/<id>/index.html`에 한 파일 랜딩페이지를 만든다. `anthropic-skills:design-router`를 거친다
+1. `LAB fdt-scaffold <id 또는 묶음 이름>`으로 `lab/fdt/<대상>/index.html` 뼈대를 만든다(표본 검증 통과가 필요하다). 아이디어별 가격 플랜·`data-plan` 추적·GA4·"출시 준비 중" 문구가 들어 있다. 그다음 `anthropic-skills:design-router`로 방향을 정해 스타일 토큰을 바꾸고, `TODO(copy)` 문구를 조사 파일의 불편 원문·빈틈 증거로 채운다
    - 헤드라인(P-Code의 문제를 한 문장으로), 문제 3개(불편 원문에서 가져온다), 해결 방식, **가격표(실제 가격을 적는다. 경쟁사 가격 기준점을 참고)**, 맨 아래 CTA "출시 알림 받기"
    - 폼은 무료 폼 서비스(Tally 등)를 임베드하거나 링크한다. 제출 후 "아직 준비 중이며 출시 때 가장 먼저 알려드립니다"를 보여준다(정직하게)
    - 분석 스니펫은 `settings.ga4_id`로 넣는다. CTA 클릭은 이벤트(`cta_click`)로 보낸다

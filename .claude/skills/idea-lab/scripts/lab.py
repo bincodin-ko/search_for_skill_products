@@ -12,6 +12,7 @@ in lab/ideas/<id>.md.
   verify ID --ok|--fail --note  record the main session's spot-check of key evidence (needed for stage 4)
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
   pending                       stage-3 ideas without scores (and which have an interrupted research file)
+  fdt-scaffold ID|BUNDLE        generate lab/fdt/<target>/index.html from the template (plans per idea, GA4, tracking)
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
   bundle --remove ID..          take ideas out of their bundle
   list [--stage S]              show ideas grouped by stage, with scores
@@ -404,7 +405,7 @@ def cmd_import(args):
     pre-filter drops. Near-duplicate titles (vs board and within the file) are skipped."""
     path = board_path(args)
     board = load(path)
-    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    rows = read_rows(args.file)
     added = skipped = dropped = 0
     for r in rows:
         title = str(r.get("title", "")).strip()
@@ -480,7 +481,8 @@ def read_rows(file):
             except json.JSONDecodeError:
                 print(f"⚠ {file}:{n} JSON 오류 — 건너뜀")
                 continue
-            rows[r.get("id")] = r
+            # id가 있는 결과 줄만 합친다(나중 줄이 이김). 하베스트 후보처럼 id가 없으면 줄마다 따로 둔다
+            rows[r.get("id") or f"_line{n}"] = r
         return list(rows.values())
     return json.loads(text)
 
@@ -495,6 +497,60 @@ def cmd_pending(args):
     for i in todo:
         mark = "md있음" if research_path(path, i["id"]).exists() else "      "
         print(f"  {i['id']}  {mark}  {i['title']}")
+    return 0
+
+
+def cmd_fdt_scaffold(args):
+    import html
+    path = board_path(args)
+    board = load(path)
+    target = args.target
+    if ID_RE.match(target):
+        ideas = [find(board, target)]
+    else:
+        ideas = [i for i in board["ideas"] if i.get("bundle") == target]
+        if not ideas:
+            sys.exit(f"'{target}'은 아이디어 id도, 묶음 이름도 아닙니다")
+    ideas.sort(key=lambda i: (i.get("priority") is None, i.get("priority") or 0))
+    unverified = [i["id"] for i in ideas if not (i.get("verified") or {}).get("ok")]
+    if unverified and not args.force:
+        sys.exit(f"표본 검증이 없는 아이디어가 있습니다: {', '.join(unverified)} (LAB verify 먼저, 또는 --force)")
+    out = path.parent / "fdt" / target / "index.html"
+    if out.exists() and not args.force:
+        sys.exit(f"{out}가 이미 있습니다(덮어쓰려면 --force)")
+    tpl = (SCRIPT_DIR.parent / "templates" / "fdt.html").read_text(encoding="utf-8")
+    e = lambda x: html.escape(str(x or ""), quote=True)
+    first = ideas[0]
+
+    def price_of(i):
+        rm = i.get("revenue_math") or {}
+        m = re.search(r"(월|건당|연)?\s*₩?\s*[\d,]+\s*(원|만\s*원)?", str(rm.get("price", "")) or i.get("s_code", ""))
+        return m.group(0).strip() if m else "TODO 가격"
+
+    problems = "\n".join(
+        f'        <div><h3>TODO 문제 {n}</h3><p>{e(i["p_code"])}</p></div>' for n, i in enumerate(ideas, 1))
+    plans = "\n".join(
+        f"""        <div class="plan">
+          <h3>{e(i["title"])}</h3>
+          <p class="who">{e(i["p_code"][:80])}</p>
+          <div class="price" style="font-size:28px;font-weight:700">{e(price_of(i))}</div>
+          <ul><li>TODO 핵심 기능 1</li><li>TODO 핵심 기능 2</li></ul>
+          <a class="btn" href="#notify" data-cta="plan_{e(i["id"])}" data-plan="{e(i["id"])}">이 가격으로 알림 받기</a>
+        </div>""" for i in ideas)
+    page = (tpl.replace("{{TITLE}}", e(first["title"]))
+               .replace("{{BRAND}}", e(first["title"] if len(ideas) == 1 else f"TODO 브랜드({target})"))
+               .replace("{{HEADLINE}}", e(first["p_code"]))
+               .replace("{{LEAD}}", e(first["s_code"]))
+               .replace("{{PROBLEMS}}", problems)
+               .replace("{{PLANS}}", plans)
+               .replace("{{FDT_ID}}", e(target))
+               .replace("{{GA4}}", e(board["settings"].get("ga4_id", "")))
+               .replace("{{TALLY}}", ""))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(page, encoding="utf-8")
+    print(f"만들었습니다: {out}")
+    print("다음: ① design-router로 방향을 정해 스타일 토큰 교체 ② TODO(copy) 문구를 조사 파일의 불편 원문·빈틈 증거로 채움"
+          " ③ Tally 폼 ID 입력 ④ 배포 후 LAB fdt-start <id> --url ..")
     return 0
 
 
@@ -552,6 +608,8 @@ def cmd_bundle(args):
 def cmd_stats(args):
     """Funnel per discovery source: how many candidates survived each gate."""
     board = load(board_path(args))
+    if args.tags:
+        return stats_by_tag(board, args.min)
     rows = {}
     for i in board["ideas"]:
         src = i.get("source") or "직접 추가"
@@ -573,6 +631,30 @@ def cmd_stats(args):
     for src, r in sorted(rows.items(), key=lambda kv: -kv[1]["후보"]):
         passed = r["3단계"] + r["4단계+"]
         print(f"{src:<16}" + "".join(f"{r[c]:>8}" for c in cols) + f"   {passed / r['후보']:.0%}")
+    return 0
+
+
+def stats_by_tag(board, minimum):
+    """Saturation map: per tag (industry/area), how many ideas were tried and how many survived."""
+    rows = {}
+    for i in board["ideas"]:
+        for t in i.get("tags") or []:
+            if t in ("B2B", "B2C"):
+                continue
+            r = rows.setdefault(t, [0, 0])
+            r[0] += 1
+            if i["stage"] in ("brainstorming", "filtering", "review", "done") and i.get("scores"):
+                r[1] += 1
+    items = sorted(((t, n, ok) for t, (n, ok) in rows.items() if n >= minimum), key=lambda x: (-x[1], x[0]))
+    print(f"{'태그':<14}{'후보':>6}{'생존':>6}   상태")
+    saturated = []
+    for t, n, ok in items:
+        state = "고갈(피할 것)" if n >= 8 and ok == 0 else ("얕음" if n < 4 else "")
+        if state.startswith("고갈"):
+            saturated.append(t)
+        print(f"{t:<14}{n:>6}{ok:>6}   {state}")
+    if saturated:
+        print(chr(10) + "하베스터에 넘길 고갈 분야: " + ", ".join(saturated))
     return 0
 
 
@@ -858,9 +940,17 @@ def main():
     p.add_argument("file")
     p.set_defaults(func=cmd_import)
 
-    sub.add_parser("stats").set_defaults(func=cmd_stats)
+    p = sub.add_parser("stats")
+    p.add_argument("--tags", action="store_true", help="saturation map by tag instead of by source")
+    p.add_argument("--min", type=int, default=3, help="hide tags with fewer candidates")
+    p.set_defaults(func=cmd_stats)
     sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
     sub.add_parser("pending").set_defaults(func=cmd_pending)
+
+    p = sub.add_parser("fdt-scaffold")
+    p.add_argument("target", help="idea id or bundle name")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(func=cmd_fdt_scaffold)
 
     p = sub.add_parser("bundle")
     p.add_argument("name", nargs="?")
