@@ -1113,6 +1113,10 @@ def cmd_apply(args):
         for k, allowed in (("need_type", NEED_TYPES), ("market", MARKETS)):
             if r.get(k) in allowed:
                 idea[k] = r[k]
+        if r.get("dist_path"):
+            idea["dist_path"] = r["dist_path"]
+            idea["notes"] += "\n직접 만드는 유입 길: " + " / ".join(
+                f"{d.get('way', '')}({d.get('evidence', '')})" if isinstance(d, dict) else str(d) for d in r["dist_path"])
         if r.get("ops"):
             idea["ops"] = r["ops"]  # 1인 운영 부담: {"hours_month":..,"human_work":"..","automatable":..}
             idea["notes"] += f"\n운영 부담: 월 {r['ops'].get('hours_month', '?')}시간 · {r['ops'].get('human_work', '')}"
