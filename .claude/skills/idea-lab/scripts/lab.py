@@ -13,6 +13,7 @@ in lab/ideas/<id>.md.
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
   pending                       stage-3 ideas without scores (and which have an interrupted research file)
   fdt-scaffold ID|BUNDLE        generate lab/fdt/<target>/index.html from the template (plans per idea, GA4, tracking)
+  rank [--apply]                rank scored ideas (avg need·revenue·tenx·dist, then fit); --apply sets stage-4 priorities
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
   bundle --remove ID..          take ideas out of their bundle
   list [--stage S]              show ideas grouped by stage, with scores
@@ -197,7 +198,13 @@ def cmd_init(args):
         return 0
     save(path, {"version": 1, "rev": 0, "settings": dict(DEFAULT_SETTINGS), "ideas": []})
     (path.parent / "ideas").mkdir(exist_ok=True)
-    print(f"created {path}")
+    batches = path.parent / "batches"
+    batches.mkdir(exist_ok=True)
+    for tpl in ("RESEARCH_PROMPT.md", "HARVEST_PROMPT.md"):
+        src = SCRIPT_DIR.parent / "templates" / tpl
+        if src.exists() and not (batches / tpl).exists():
+            (batches / tpl).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"created {path} (+ lab/batches/ 지시문 템플릿)")
     return 0
 
 
@@ -255,6 +262,8 @@ def cmd_list(args):
                 extra += f"  ←{i['parent']}"
             if i.get("bundle"):
                 extra += f"  [묶음:{i['bundle']}]"
+            if i.get("hold") and i["stage"] == "ideation":
+                extra += "  [보류: 빈틈 증거 확인 필요]"
             print(f"  {i['id']}  {pri:>4}  {i['title']}{extra}")
     cap = board["settings"]["fdt_capacity"]
     print(f"\n{funnel_line(board)} · FDT 진행 {len(live_fdts(board))}" + (f"/{cap}" if cap else ""))
@@ -439,7 +448,12 @@ def cmd_import(args):
         board["ideas"].append(idea)
         added += 1
         pf = str(r.get("prefilter", "pass")).strip()
-        if pf.lower().startswith("drop"):
+        if pf.lower().startswith("hold"):
+            # 불편·지불 증거는 있지만 독립 빈틈 증거가 로그인·앱 리뷰 뒤에 있는 후보: 1단계에 두고 메인이 Aside로 확인
+            idea["hold"] = pf.split(":", 1)[-1].strip()
+            idea["notes"] += "\n보류: 독립 빈틈 증거 필요 — " + idea["hold"]
+            log(idea, "ideation", "ideation", "hold", "하베스트 보류: " + idea["hold"])
+        elif pf.lower().startswith("drop"):
             idea["stage"] = "dropped"
             log(idea, "ideation", "dropped", "drop", "사전 필터: " + pf.split(":", 1)[-1].strip())
             dropped += 1
@@ -551,6 +565,44 @@ def cmd_fdt_scaffold(args):
     print(f"만들었습니다: {out}")
     print("다음: ① design-router로 방향을 정해 스타일 토큰 교체 ② TODO(copy) 문구를 조사 파일의 불편 원문·빈틈 증거로 채움"
           " ③ Tally 폼 ID 입력 ④ 배포 후 LAB fdt-start <id> --url ..")
+    return 0
+
+
+def rank_key(i):
+    s = i.get("scores", {})
+    vals = [s.get(k) for k in ("need", "revenue", "tenx", "dist")]
+    vals = [v for v in vals if v is not None]
+    avg = sum(vals) / len(vals) if vals else 0
+    return (-round(avg, 3), -(s.get("fit") or 0), i["id"])
+
+
+def cmd_rank(args):
+    """Recommended order. Stage-4 ideas get priorities with --apply; stage-3 ideas that beat
+    the weakest stage-4 idea are shown as swap candidates (the swap itself needs the user's OK)."""
+    path = board_path(args)
+    board = load(path)
+    f = sorted([i for i in board["ideas"] if i["stage"] == "filtering"], key=rank_key)
+    b = sorted([i for i in board["ideas"] if i["stage"] == "brainstorming" and i.get("scores")], key=rank_key)
+    fmt = lambda i: (f"{i['id']}  평균 {-rank_key(i)[0]:.2f}  fit {i.get('scores', {}).get('fit', '-')}  "
+                     f"{'검증✓' if (i.get('verified') or {}).get('ok') else '미검증'}  {i['title']}")
+    print("## 4단계 추천 순서")
+    for n, i in enumerate(f, 1):
+        print(f"  P{n}  {fmt(i)}")
+    worst = f[-1] if f else None
+    better = [i for i in b if worst is None or rank_key(i) < rank_key(worst)]
+    free = board["settings"]["max_parallel"] - count_active(board)
+    print(f"\n## 3단계 대기 중 4단계로 올릴 만한 것 (빈자리 {free}개)")
+    for i in better[: max(free, 3)]:
+        print(f"  {fmt(i)}" + ("" if (i.get("verified") or {}).get("ok") else "  ← 올리기 전에 표본 검증 필요"))
+    if not better:
+        print("  없음")
+    if args.apply:
+        for n, i in enumerate(f, 1):
+            if i.get("priority") != n:
+                i["priority"] = n
+                log(i, "filtering", "filtering", "hold", f"LAB rank: 우선순위 P{n}(평균·fit 순)")
+        save(path, board)
+        print("\n4단계 우선순위를 적용했습니다")
     return 0
 
 
@@ -946,6 +998,10 @@ def main():
     p.set_defaults(func=cmd_stats)
     sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
     sub.add_parser("pending").set_defaults(func=cmd_pending)
+
+    p = sub.add_parser("rank")
+    p.add_argument("--apply", action="store_true")
+    p.set_defaults(func=cmd_rank)
 
     p = sub.add_parser("fdt-scaffold")
     p.add_argument("target", help="idea id or bundle name")
