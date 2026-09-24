@@ -20,6 +20,7 @@
 - `LAB set key=value ..` — `founder`, `analytics`, `ga4_id`, `fdt_capacity`(0=제한 없음), `fdt_go_rate` 등
 
 ## 판정
+- `LAB timing [--date YYYY-MM-DD] [--all]` — 타이밍 대기 아이디어 중 재검토 날짜가 온 것(점검 때마다 실행해 다시 본다)
 - `LAB market <id> kr|global|both` — 시장 표시(global·both는 대시보드·목록에 🌍 해외). `LAB add --market`, 하베스트 JSON의 `market`도 같은 값
 - `LAB score <id> need=.. revenue=.. fame=.. tenx=.. dist=.. fit=..` (수익성 = max(revenue, fame)) / `LAB score <id> --prelim easy=.. moat=.. scale=..`
 - `LAB apply <resultN.json 또는 .jsonl>` — 조사 결과 일괄 반영(점수·가안·메모·수익 계산, need/revenue ≤ 2 자동 Drop, pass이거나 근거 있는 pivot만 예외 후보)

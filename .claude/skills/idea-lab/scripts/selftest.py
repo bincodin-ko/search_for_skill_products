@@ -46,13 +46,18 @@ f = write("h.jsonl", [
     {"title": "테스트E 유명세로 사는 후보", "p": "p", "s": "s", "tags": ["B2C"], "signal": "s", "signal_url": "https://a.b", "source": "테스트", "prefilter": "pass"},
 ])
 out = lab("import", f)
-ids = [i["id"] for i in board()["ideas"] if i["title"].startswith("테스트")]
-A, Bb, C, D, E = ids
+ids = [i["id"] for i in board()["ideas"] if i["title"].startswith("테스트") and not i["title"].startswith("테스트F")]
+A, Bb, C, D, E = ids[:5]
 a = idea(A)
 check(a["market"] == "global" and a.get("need_type") == "want", "A: market=global, need_type=want 저장")
 check("행동 증거" in a["notes"] and "왜 지금" in a["notes"] and "유명세 경로" in a["notes"], "A: 행동·왜지금·유명세 신호가 메모에")
 check(idea(Bb)["stage"] == "dropped" and "재확인 반영" in out, "B: 재확인 줄이 drop으로 반영")
 check(not any("_imported_now" in i for i in board()["ideas"]), "임시 표식 _imported_now 제거")
+f = write("h_wait.jsonl", [{"title": "테스트F 타이밍 대기 하베스트", "p": "p", "s": "s", "tags": ["B2B"], "signal": "s", "signal_url": "https://a.b",
+     "source": "테스트", "prefilter": "hold: 시행령 확인", "why_now": "2027 시행", "revisit": "2027-01-15 (고시 확인)"}])
+lab("import", f)
+fi = next(i for i in board()["ideas"] if i["title"] == "테스트F 타이밍 대기 하베스트")
+check(fi["stage"] == "ideation" and str(fi.get("hold", "")).startswith("타이밍 대기") and fi.get("next_review") == "2027-01-15", "F: 하베스트 hold+revisit → 타이밍 대기·재검토 날짜")
 
 print("2) apply: fame·fame_math·수익모델·운영부담·유입길·wait·자동 Drop(수익성=max)")
 f = write("r.jsonl", [
@@ -119,6 +124,8 @@ for cmd in (["drops", "--limit", "3"], ["stats", "--stages"], ["exceptions"], ["
     o = lab(*cmd)
     check("Traceback" not in o, f"{' '.join(cmd)} 실행")
 
+out = lab("timing", "--date", "2027-01-20")
+check("2027-01-15" in out, "timing: 재검토 날짜가 온 타이밍 대기 표시")
 print("6) score 명령: fame 키, 경고")
 out = lab("score", E, "need=3", "revenue=2", "fame=2")
 check("수익성(max(revenue, fame)) ≤ 2" in out, "score: 수익성 ≤ 2 경고")

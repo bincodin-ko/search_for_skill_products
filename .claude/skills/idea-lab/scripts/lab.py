@@ -453,6 +453,19 @@ def cmd_note(args):
     return 0
 
 
+def cmd_timing(args):
+    """타이밍 대기·재검토 날짜가 있는 아이디어를 날짜순으로. --all이 아니면 오늘(또는 --date)까지 온 것만."""
+    board = load(board_path(args))
+    today = args.date or dt.date.today().isoformat()
+    rows = sorted((str(i.get("next_review") or "9999"), i["id"], i["stage"], i["title"], str(i.get("hold") or ""))
+                  for i in board["ideas"] if i.get("next_review") and i["stage"] != "dropped")
+    due = [r for r in rows if args.all or r[0] <= today]
+    print(f"재검토 {'전체' if args.all else today + '까지'}: {len(due)}개 (날짜 있는 것 전체 {len(rows)}개)")
+    for d, iid, st, t, h in due:
+        print(f"  {d}  {iid}  [{st}] {t}" + (f"\n        {h[:110]}" if h else ""))
+    return 0
+
+
 def cmd_market(args):
     path = board_path(args)
     board = load(path)
@@ -593,7 +606,14 @@ def cmd_import(args):
         idea["_imported_now"] = True
         added += 1
         pf = str(r.get("prefilter", "pass")).strip()
-        if pf.lower().startswith("hold"):
+        rv = re.match(r"\s*(\d{4}-\d{2}-\d{2})", str(r.get("revisit") or ""))
+        if (pf.lower().startswith("wait") or pf.lower().startswith("hold")) and rv and r.get("why_now"):
+            # 타이밍 대기: 막 열리는 시장 — 재검토 날짜와 함께 1단계에 둔다(대시보드 '타이밍 대기' 칩)
+            idea["hold"] = f"타이밍 대기 — {r['why_now']} (재검토 {rv.group(1)})"[:300]
+            idea["next_review"] = rv.group(1)
+            idea["notes"] += "\n" + idea["hold"] + (f"\n대기 중 확인할 것: {pf.split(':', 1)[-1].strip()}" if ":" in pf else "")
+            log(idea, "ideation", "ideation", "hold", "타이밍 대기(하베스트): " + idea["hold"])
+        elif pf.lower().startswith("hold"):
             # 불편·지불 증거는 있지만 독립 빈틈 증거가 로그인·앱 리뷰 뒤에 있는 후보: 1단계에 두고 메인이 Aside로 확인
             idea["hold"] = pf.split(":", 1)[-1].strip()
             idea["notes"] += "\n보류: 독립 빈틈 증거 필요 — " + idea["hold"]
@@ -1341,6 +1361,11 @@ def main():
     p.add_argument("--tags", help="comma-separated tags, e.g. B2B,자영업")
     p.add_argument("--market", choices=MARKETS, help="kr(한국) | global(해외) | both")
     p.set_defaults(func=cmd_add)
+
+    p = sub.add_parser("timing", help="타이밍 대기·재검토 날짜가 온 아이디어")
+    p.add_argument("--date", help="기준일 YYYY-MM-DD(기본 오늘)")
+    p.add_argument("--all", action="store_true", help="날짜가 안 온 것까지 전부")
+    p.set_defaults(func=cmd_timing)
 
     p = sub.add_parser("market", help="시장 표시 바꾸기: kr | global | both (대시보드 🌍 표시)")
     p.add_argument("id")
