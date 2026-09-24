@@ -45,6 +45,13 @@
 ### 경쟁사가 있으면 이길 틈부터 본다 (`solves: "beatable"`)
 같은 대상에게 **무료·저가로 이미 푸는** 제품만 `yes`(Drop 근거). 같은 대상에게 팔지만 **비싸거나(3배 이상) 1~2점 리뷰 불만이 반복되거나 특정 층(1인·소규모·특정 플랫폼·특정 언어)을 안 받는** 유료 제품은 `beatable` + `weakness`(리뷰 링크·가격 비교)로 적는다 — 시장이 있다는 증거이고 이길 틈이다
 
+### 붐비는 시장 진입 (`crowded_winnable`, 사용자 승인 e — 보완 점검 #3)
+빈 칸만 찾으면 2026년 한국 시장에선 거의 안 나온다. 대부분의 1인 제품은 붐비는 시장에서 **유통과 포지셔닝**으로 이긴다. 같은 대상에게 무료·저가로 푸는 제품(`solves: yes`)이 있어도 아래 **세 가지가 모두** 있으면 compete를 통과시킨다:
+1. `dist_edge` — 창업자가 그 대상에게 닿는 **우위 채널**(숫자·링크): 창업자가 이미 활동하는 커뮤니티(바이브코딩·GPTers·인디해커·X), 선점 가능한 검색 키워드(월 검색량), 무료 도구로 만들 유입 길. **dist 점수 4 이상**이어야 한다
+2. `weakness` — 기존 제품의 약점 증거(1~2점 리뷰 반복 불만, 특정 층을 안 받음, 비쌈, 느린 대응) 링크
+3. `wedge` — 좁게 파고들 첫 자리(특정 업종·직군·플랫폼·언어 전용, 한 가지 일만 10배 잘함)와 그 자리를 기존 제품이 소홀히 하는 이유
+`"crowded_winnable":{"dist_edge":"GPTers 7.5만 중 바이브코딩 게시판 활동, 키워드 '...' 월 2,400","weakness":"리뷰 링크","wedge":"1인 셀러 전용 ..."}` — 셋 중 하나라도 비면 기존 규칙대로 Drop
+
 ### 해외 시장도 본다 (`market`: kr | global | both, 대시보드 🌍 표시)
 한국에 한정하지 않는다. 영어로 전 세계 틈새를 노릴 수 있으면 `global`, 둘 다면 `both`. 해외는 Reddit·Indie Hackers·Product Hunt·AppSumo·G2/Capterra·Shopify 앱 리뷰의 **영어 원문**으로 pain을 보고, 가격은 USD(원화 환산 병기), 도달은 해외 커뮤니티·마켓으로 본다. 해외 성숙 시장(대형 도구가 꽉 찬 곳)은 수율이 낮았다(harvest.md 생존 패턴) — 틈새(특정 직군·플랫폼·언어)를 노린다
 
@@ -101,7 +108,7 @@ subscription(월 가격 × 고객 수) · success_fee(회수·절감액 × 수�
 1. 아이디어마다 `C:\Users\김현빈\ideas\lab\ideas\<id>.md` (한국어):
    `# <id> — <제목>` / `조사일: <오늘> (3단계 빠른 조사)` / `## 요약` / `## 경쟁사·대체재`(표: 이름|무엇|가격(단위·날짜)|빈틈|링크) / `## 롤모델` / `## 불편 원문` / `## 유통` / `## 점수` / `## 수익 계산` / `## 판정 의견` / `## 로그인 필요 출처`
 2. `C:\Users\김현빈\ideas\lab\batches\result<N>.jsonl` (N은 배치 번호) — **아이디어마다 한 줄씩 즉시 덧붙인다**(JSON 객체 하나가 한 줄). 같은 id를 다시 쓰면 나중 줄이 이긴다:
-   `{"id":"i000","need":3,"revenue":3,"tenx":3,"dist":3,"fit":3,"easy":2,"moat":2,"scale":3,"verdict":"pass|drop|pivot","reason":"근거 한 줄(사실)","pivot":"","note":"카드 메모용 3~5줄","login_needed":[],"pivot_evidence":"","revenue_math":{"model":"subscription","formula":"월 ₩19,900 × 151명","price":"월 ₩19,900(경쟁사 X 월 ₩24,900, 2026-09 확인)","customers_needed":151,"basis":"1년 안에 모을 근거"},"need_type":"pain|want","dist_path":[{"way":"무료 계산기 검색 유입","evidence":"키워드 월 검색량 2,400(2026-09 확인)"}],"market":"kr|global|both","behavior_evidence":["크몽 대행 120건 판매 링크"],"ops":{"hours_month":8,"human_work":"CS","automatable":true},"why_now":"","revisit":"","fame":3,"fame_math":{"reach_goal":"1년 월 사용자 1만","basis":"비슷한 무료 제품 규모 링크","monetize":["광고(선례 링크)","파생 유료 기능(선례 링크)"],"run_cost":"월 ₩5만"}}` (한 줄)
+   `{"id":"i000","need":3,"revenue":3,"tenx":3,"dist":3,"fit":3,"easy":2,"moat":2,"scale":3,"verdict":"pass|drop|pivot","reason":"근거 한 줄(사실)","pivot":"","note":"카드 메모용 3~5줄","login_needed":[],"pivot_evidence":"","revenue_math":{"model":"subscription","formula":"월 ₩19,900 × 151명","price":"월 ₩19,900(경쟁사 X 월 ₩24,900, 2026-09 확인)","customers_needed":151,"basis":"1년 안에 모을 근거"},"need_type":"pain|want","crowded_winnable":{"dist_edge":"","weakness":"","wedge":""},"dist_path":[{"way":"무료 계산기 검색 유입","evidence":"키워드 월 검색량 2,400(2026-09 확인)"}],"market":"kr|global|both","behavior_evidence":["크몽 대행 120건 판매 링크"],"ops":{"hours_month":8,"human_work":"CS","automatable":true},"why_now":"","revisit":"","fame":3,"fame_math":{"reach_goal":"1년 월 사용자 1만","basis":"비슷한 무료 제품 규모 링크","monetize":["광고(선례 링크)","파생 유료 기능(선례 링크)"],"run_cost":"월 ₩5만"}}` (한 줄)
    점수는 1~5 정수. 줄마다 JSON 문법이 맞아야 한다.
 3. 끝나면 pass/pivot 아이디어와 한 줄 이유만 120단어 이내로 돌려준다.
 

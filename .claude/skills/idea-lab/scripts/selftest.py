@@ -102,6 +102,14 @@ f = write("a2.jsonl", [{"id": E, "queries": list(range(6)), "competitors": [], "
 lab("audit", f)
 check(idea(E)["gate"]["pain"]["v"] == "pass", "E: 원문 1 + 행동 증거 2 → pain 통과")
 
+f = write("a3.jsonl", [{"id": C, "queries": list(range(6)), "competitors": [{"name": "무료툴", "solves": "yes"}], "pain_quotes": [], "verdict": "weak", "reason": "r",
+                        "crowded_winnable": {"dist_edge": "GPTers 활동", "weakness": "리뷰 불만", "wedge": "1인 전용"}}])
+lab("score", C, "dist=4")
+lab("audit", f)
+check(idea(C)["gate"]["compete"]["v"] == "pass" and "붐비는 시장 진입" in idea(C)["gate"]["compete"]["note"], "C: 무료 경쟁 있어도 crowded_winnable 3가지+dist 4 → compete 통과")
+lab("score", C, "dist=3")
+lab("audit", f)
+check(idea(C)["gate"]["compete"]["v"] == "fail", "C: dist 3이면 crowded_winnable 있어도 compete 실패")
 print("4) gate·move: 6항목 통과 전엔 4단계 불가, 통과하면 가능")
 lab("verify", A, "--ok", "--note", "t")
 out = lab("move", A, "filtering", "--reason", "t", ok=False)

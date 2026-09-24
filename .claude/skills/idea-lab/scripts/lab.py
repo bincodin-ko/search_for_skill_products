@@ -711,7 +711,12 @@ def cmd_audit(args):
         note = (f"푸는 제품: {', '.join(solved)}" if solved else f"검색 {len(r.get('queries') or [])}회, 완전 대체 없음")
         if beat:
             note += f" · 이길 틈 있는 유료 경쟁: {', '.join(beat)}"
-        g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and not solved else "fail", "note": note, "at": now()}
+        cw = r.get("crowded_winnable") or {}
+        crowded_ok = bool(solved) and all(str(cw.get(k) or "").strip() for k in ("dist_edge", "weakness", "wedge")) \
+            and ((idea.get("scores") or {}).get("dist") or 0) >= 4
+        if crowded_ok:
+            note += f" · 붐비는 시장 진입(유통 우위: {cw['dist_edge']} / 약점: {cw['weakness']} / 첫 자리: {cw['wedge']})"
+        g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and (not solved or crowded_ok) else "fail", "note": note, "at": now()}
         prev_pain = g.get("pain") or {}
         if prev_pain.get("v") == "pass" and "로그인" in (prev_pain.get("note") or "") and len(quotes) < 3:
             # 메인이 로그인 출처로 채운 원문은 감사원(공개 검색만 가능)이 못 본다 — 덮어쓰지 않는다
@@ -1133,6 +1138,9 @@ def cmd_apply(args):
         for k, allowed in (("need_type", NEED_TYPES), ("market", MARKETS)):
             if r.get(k) in allowed:
                 idea[k] = r[k]
+        if isinstance(r.get("crowded_winnable"), dict) and any(r["crowded_winnable"].values()):
+            idea["crowded_winnable"] = r["crowded_winnable"]
+            idea["notes"] += "\n붐비는 시장 진입 근거: " + " / ".join(f"{k}: {v}" for k, v in r["crowded_winnable"].items() if v)
         if r.get("dist_path"):
             idea["dist_path"] = r["dist_path"]
             idea["notes"] += "\n직접 만드는 유입 길: " + " / ".join(
