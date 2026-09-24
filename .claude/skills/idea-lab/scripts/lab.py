@@ -866,7 +866,7 @@ def cmd_exceptions(args):
     board = load(board_path(args))
     rows = []
     for i in board["ideas"]:
-        if i["stage"] != "dropped":
+        if i["stage"] != "dropped" or i.get("domain_off") or i.get("exception_decision"):
             continue
         reasons = [str(l.get("reason", "")) for l in i.get("log", [])]
         flagged = [x for x in reasons if "규칙 예외 후보" in x]

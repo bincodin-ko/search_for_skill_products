@@ -289,8 +289,11 @@ function render() {
     <span>오늘 리뷰 <b>${due}</b></span>
     <span>FDT 기준: 방문 ${s.fdt_min_visits}명 이상 · 가입률 ${(s.fdt_go_rate * 100).toFixed(0)}% 통과 · ${(s.fdt_retry_rate * 100).toFixed(0)}% 미만 Drop</span>`;
 
-  $("board").innerHTML = STAGES.map((st) => {
-    const all = ideas.filter((i) => i.stage === st);
+  const COLS = [...STAGES.slice(0, -1), "exceptions", "dropped"];
+  $("board").innerHTML = COLS.map((st) => {
+    const all = st === "exceptions" ? ideas.filter(isException)
+      : st === "dropped" ? ideas.filter((i) => i.stage === "dropped" && !isException(i))
+      : ideas.filter((i) => i.stage === st);
     let list = all.filter(matches).sort(sorters[view.sort] || sorters.priority);
     let filterBar = "";
     if (st === "dropped") {
@@ -302,13 +305,12 @@ function render() {
     }
     const count = view.q ? `${list.length}/${all.length}` : `${all.length}`;
     let body = list.map(cardHtml).join("") || '<div class="empty">비어 있음</div>';
+    if (st === "exceptions" && !list.length) body = '<div class="empty">결정할 예외 후보가 없습니다</div>';
     if (st === "dropped" && view.foldDrop && !view.openDrop && !view.q && !view.dropType && list.length) {
-      const flagged = list.filter(isException);
-      body = flagged.map(cardHtml).join("") +
-        `<div class="collapsed-note">${list.length - flagged.length}개 접힘 · <button class="btn" type="button" id="openDrop">펼치기</button></div>`;
+      body = `<div class="collapsed-note">${list.length}개 접힘 · <button class="btn" type="button" id="openDrop">펼치기</button></div>`;
     }
     return `<section class="col" data-stage="${st}">
-      <h2>${esc(labels[st] || st)} <span>${count}</span></h2>
+      <h2>${esc(st === "exceptions" ? "예외 후보(결정 필요)" : (labels[st] || st))} <span>${count}</span></h2>
       ${filterBar}${body}
     </section>`;
   }).join("");
@@ -327,6 +329,7 @@ function render() {
     col.addEventListener("dragleave", () => col.classList.remove("over"));
     col.addEventListener("drop", (e) => {
       e.preventDefault(); col.classList.remove("over");
+      if (col.dataset.stage === "exceptions") return;
       moveIdea(e.dataTransfer.getData("text/plain"), col.dataset.stage, null, "대시보드에서 이동");
     });
   });
@@ -338,7 +341,7 @@ function cardHtml(i) {
   const av = avgOf(i);
   if (av != null) chips.push(`<span class="chip">평균 ${av.toFixed(1)}</span>`);
   if (i.stage === "filtering" && i.fdt_live?.url) chips.push(`<span class="chip due">FDT 진행</span>`);
-  if (isException(i)) chips.push(`<span class="chip retry">규칙 예외 후보</span>`);
+
   if (research.has(i.id)) chips.push(`<span class="chip go">조사✓</span>`);
   if (i.verified) chips.push(`<span class="chip ${i.verified.ok ? "go" : "drop"}">검증${i.verified.ok ? "✓" : "✗"}</span>`);
   if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
@@ -369,8 +372,13 @@ function cardHtml(i) {
   </article>`;
 }
 
+function pivotOf(i) {
+  const r = [...(i.log || [])].reverse().map((l) => String(l.reason || "")).find((x) => x.includes("피벗안:"));
+  return r ? r.split("피벗안:")[1].split(" · ⚑")[0].trim() : "";
+}
+
 function isException(i) {
-  if (i.stage !== "dropped") return false;
+  if (i.stage !== "dropped" || i.domain_off || i.exception_decision) return false;
   const last = (i.log || []).slice(-1)[0];
   return !!(last && String(last.reason || "").includes("규칙 예외 후보"));
 }
@@ -410,6 +418,14 @@ function openIdea(id) {
     <div class="row"><label>P-Code · 누가, 어떤 상황에서, 어떤 문제를 겪나</label><textarea name="p_code">${esc(idea.p_code)}</textarea></div>
     <div class="row"><label>S-Code · 해결책과 수익 모델</label><textarea name="s_code">${esc(idea.s_code)}</textarea></div>
     ${isNew ? "" : `
+    ${isException(idea) ? `<div class="section"><h4>규칙 예외 후보 — 결정해 주세요</h4>
+      <div class="why">수익성·필요성 점수 때문에 규칙상 Drop됐지만 조사원은 살릴 만하다고 봤습니다.${pivotOf(idea) ? `<br><b>피벗안</b> · ${esc(pivotOf(idea))}` : ""}</div>
+      <div class="actions" style="margin-top:8px">
+        <button class="btn go" value="exc_revive">살리기(3단계로)</button>
+        <button class="btn" value="exc_pivot">피벗안으로 살리기</button>
+        <button class="btn drop" value="exc_reject">버리기</button>
+      </div></div>` : ""}
+    ${idea.exception_decision ? `<div class="hint">예외 결정: ${esc({ revive: "살림", pivot: "피벗으로 살림(메인이 새 아이디어로 등록)", reject: "버림" }[idea.exception_decision.v] || idea.exception_decision.v)} · ${esc(idea.exception_decision.at || "")}</div>` : ""}
     ${idea.stage === "dropped" && idea.drop ? `<div class="section"><h4>Drop 이유 · ${esc(DROP_LABELS[idea.drop.type] || idea.drop.type)}</h4><div class="why">${esc(idea.drop.from || idea.drop.summary || "")}</div></div>` : ""}
     ${research.has(idea.id) ? `<div class="section"><h4>조사 (lab/ideas/${esc(idea.id)}.md)</h4><div class="md" id="research">불러오는 중…</div></div>` : ""}
     <div class="grid2">
@@ -494,6 +510,16 @@ function openIdea(id) {
       };
     }
     const reason = val("reason");
+    if (action && action.startsWith("exc_")) {
+      const v = action.slice(4);
+      const now = localNow();
+      idea.exception_decision = { v, at: now };
+      if (v === "revive") { idea.exception_revived = true; return moveIdea(idea.id, "brainstorming", "go", "사용자 예외 승인(대시보드) — 20개 목표에는 세지 않음"); }
+      (idea.log = idea.log || []).push({ at: now, from: "dropped", to: "dropped", verdict: v === "reject" ? "drop" : "hold",
+        reason: v === "reject" ? "사용자 예외 거절(대시보드)" : "사용자 결정: 피벗안으로 살림 — 메인이 LAB add --from으로 새 아이디어 등록" });
+      idea.updated_at = now;
+      return save(v === "reject" ? "예외 후보를 버렸습니다" : "피벗으로 살리기 요청을 기록했습니다");
+    }
     if (action === "go") return moveIdea(idea.id, NEXT[idea.stage], "go", reason);
     if (action === "drop") return moveIdea(idea.id, "dropped", "drop", reason);
     if (action === "revive") return moveIdea(idea.id, "ideation", "retry", reason);
