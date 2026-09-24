@@ -13,6 +13,8 @@ in lab/ideas/<id>.md.
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
   pending                       stage-3 ideas without scores (and which have an interrupted research file)
   fdt-scaffold ID|BUNDLE        generate lab/fdt/<target>/index.html from the template (plans per idea, GA4, tracking)
+  gate ID [--set k=pass ..]     the 6-item stage-4 gate (compete pain pay math build redteam)
+  audit FILE                    apply red-team audit results (.jsonl) to the gate
   gated [--all]                 ideas whose research left login-gated sources; default = only ones login data could still change
   rank [--apply]                rank scored ideas (avg need·revenue·tenx·dist, then fit); --apply sets stage-4 priorities
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
@@ -302,6 +304,9 @@ def cmd_move(args):
         if not (idea.get("verified") or {}).get("ok") and not args.force:
             sys.exit("핵심 근거 표본 검증이 없습니다. 링크를 직접 열어 확인한 뒤 "
                      "LAB verify <id> --ok --note '..' 먼저, 또는 --force")
+        bad = gate_missing(idea)
+        if bad and not args.force:
+            sys.exit("될놈 관문 미통과: " + ", ".join(bad) + " — LAB gate <id>로 확인, 또는 --force")
     from_stage = idea["stage"]
     idea["stage"] = args.stage
     if args.priority is not None:
@@ -471,6 +476,71 @@ def cmd_import(args):
     return 0
 
 
+GATE_KEYS = {
+    "compete": "기능 문장 검색 6회 이상(한·영) + 경쟁표, 같은 대상에게 무료·저가로 푸는 제품 없음",
+    "pain": "이해관계 없는 불편 원문 3건 이상(24개월 이내, 로그인 출처 포함)",
+    "pay": "같은 대상이 지금 이 문제에 돈을 낸다(가격·단위·출처)",
+    "math": "월 300만 원 수익 계산 + 첫 고객 도달 경로(채널·도달 가능 수)",
+    "build": "1인 바이브코딩으로 4주 안에 MVP 가능, 필수 API·제휴가 막혀 있지 않음",
+    "redteam": "레드팀 감사(죽일 근거 찾기)에서 kill이 아님",
+}
+
+
+def gate_missing(idea):
+    g = idea.get("gate") or {}
+    return [k for k in GATE_KEYS if (g.get(k) or {}).get("v") != "pass"]
+
+
+def cmd_gate(args):
+    """될놈 관문: 4단계에 들어가려면 여섯 항목이 모두 pass여야 한다(평균 점수만으로는 못 들어간다)."""
+    path = board_path(args)
+    board = load(path)
+    idea = find(board, args.id)
+    g = idea.setdefault("gate", {})
+    for kv in args.set or []:
+        k, _, v = kv.partition("=")
+        if k not in GATE_KEYS or v not in ("pass", "fail", "unknown"):
+            sys.exit(f"잘못된 값: {kv} (키: {', '.join(GATE_KEYS)} / 값: pass|fail|unknown)")
+        g[k] = {"v": v, "note": args.note or "", "at": now()}
+    if args.set:
+        log(idea, idea["stage"], idea["stage"], "hold", "관문 기록: " + " ".join(args.set) + (f" — {args.note}" if args.note else ""))
+        save(path, board)
+    print(f"{idea['id']} {idea['title']}")
+    for k, desc in GATE_KEYS.items():
+        e = g.get(k) or {}
+        mark = {"pass": "✓", "fail": "✗"}.get(e.get("v"), "?")
+        print(f"  {mark} {k:8} {desc}" + (f"\n             └ {e['note']}" if e.get("note") else ""))
+    miss = gate_missing(idea)
+    print("관문 통과" if not miss else f"미통과: {', '.join(miss)}")
+    return 0
+
+
+def cmd_audit(args):
+    """레드팀 감사 결과(.jsonl)를 반영: 경쟁·불편·지불·레드팀 네 항목을 증거 개수로 자동 판정한다."""
+    path = board_path(args)
+    board = load(path)
+    n = 0
+    for r in read_rows(args.file):
+        idea = find(board, r["id"])
+        comps = r.get("competitors") or []
+        quotes = [q for q in r.get("pain_quotes") or [] if q.get("independent", True)]
+        g = idea.setdefault("gate", {})
+        solved = [c["name"] for c in comps if c.get("solves") == "yes"]
+        g["compete"] = {"v": "pass" if len(r.get("queries") or []) >= 6 and not solved else "fail",
+                        "note": (f"푸는 제품: {', '.join(solved)}" if solved else f"검색 {len(r.get('queries') or [])}회, 완전 대체 없음"), "at": now()}
+        g["pain"] = {"v": "pass" if len(quotes) >= 3 else "fail", "note": f"독립 원문 {len(quotes)}건", "at": now()}
+        g["pay"] = {"v": "pass" if r.get("pay_evidence") else "fail", "note": f"지불 증거 {len(r.get('pay_evidence') or [])}건", "at": now()}
+        g["redteam"] = {"v": "fail" if r.get("verdict") == "kill" else "pass", "note": f"{r.get('verdict')}: {r.get('reason', '')}", "at": now()}
+        idea["audit"] = r
+        if r.get("login_sources"):
+            idea["notes"] += "\n로그인 필요 출처: " + " / ".join(r["login_sources"])
+        log(idea, idea["stage"], idea["stage"], "hold", f"레드팀 감사 {r.get('verdict')}: {r.get('reason', '')}")
+        n += 1
+    save(path, board)
+    print(f"감사 {n}건 반영. `LAB gate <id>`로 항목별 확인")
+    return 0
+
+
 def cmd_verify(args):
     path = board_path(args)
     board = load(path)
@@ -610,8 +680,11 @@ def cmd_rank(args):
     board = load(path)
     f = sorted([i for i in board["ideas"] if i["stage"] == "filtering"], key=rank_key)
     b = sorted([i for i in board["ideas"] if i["stage"] == "brainstorming" and i.get("scores")], key=rank_key)
-    fmt = lambda i: (f"{i['id']}  평균 {-rank_key(i)[0]:.2f}  fit {i.get('scores', {}).get('fit', '-')}  "
-                     f"{'검증✓' if (i.get('verified') or {}).get('ok') else '미검증'}  {i['title']}")
+    def fmt(i):
+        miss = gate_missing(i)
+        return (f"{i['id']}  평균 {-rank_key(i)[0]:.2f}  fit {i.get('scores', {}).get('fit', '-')}  "
+                f"{'검증✓' if (i.get('verified') or {}).get('ok') else '미검증'}  "
+                f"{'관문✓' if not miss else '관문✗(' + ','.join(miss) + ')'}  {i['title']}")
     print("## 4단계 추천 순서")
     for n, i in enumerate(f, 1):
         print(f"  P{n}  {fmt(i)}")
@@ -625,9 +698,9 @@ def cmd_rank(args):
     else:
         # 자리 제한 없음: 규칙(need·revenue ≥ 3)을 통과한 3단계 아이디어는 모두 후보, 표본 검증이 관문
         better = [i for i in b if min(i["scores"].get("need", 0), i["scores"].get("revenue", 0)) >= 3]
-        print("\n## 3단계 대기 중 4단계로 올릴 것 (자리 제한 없음 — 표본 검증 통과가 관문)")
+        print("\n## 3단계 대기 (자리 제한 없음 — 표본 검증 + 될놈 관문 6항목이 관문)")
     for i in better:
-        print(f"  {fmt(i)}" + ("" if (i.get("verified") or {}).get("ok") else "  ← 올리기 전에 표본 검증 필요"))
+        print(f"  {fmt(i)}")
     if not better:
         print("  없음")
     if args.apply:
@@ -1052,6 +1125,16 @@ def main():
     p.add_argument("--remove", action="store_true")
     p.add_argument("--reason")
     p.set_defaults(func=cmd_bundle)
+
+    p = sub.add_parser("gate")
+    p.add_argument("id")
+    p.add_argument("--set", nargs="*", help="key=pass|fail|unknown (compete pain pay math build redteam)")
+    p.add_argument("--note")
+    p.set_defaults(func=cmd_gate)
+
+    p = sub.add_parser("audit")
+    p.add_argument("file")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("verify")
     p.add_argument("id")

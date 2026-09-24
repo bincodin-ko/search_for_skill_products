@@ -22,6 +22,8 @@
 ## 판정
 - `LAB score <id> need=.. revenue=.. tenx=.. dist=.. fit=..` / `LAB score <id> --prelim easy=.. moat=.. scale=..`
 - `LAB apply <resultN.json 또는 .jsonl>` — 조사 결과 일괄 반영(점수·가안·메모·수익 계산, need/revenue ≤ 2 자동 Drop, pass이거나 근거 있는 pivot만 예외 후보)
+- `LAB gate <id> [--set compete=pass pain=fail ..] [--note ..]` — 될놈 관문 6항목 보기·기록. 4단계 이동은 전부 pass여야 함
+- `LAB audit <audit.jsonl>` — 레드팀 감사 결과 반영(compete·pain·pay·redteam 자동 판정, 메인이 같은 대상 기준으로 재확인)
 - `LAB verify <id> --ok|--fail --note ".."` — 메인의 표본 검증 기록(4단계 이동에 필요)
 - `LAB move <id> <stage> --reason ".." [--verdict go|drop|hold|retry] [--priority N] [--force]`
   - stage: `ideation` `incubating` `brainstorming` `filtering` `review` `done` `dropped`
