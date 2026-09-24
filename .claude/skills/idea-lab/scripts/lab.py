@@ -43,6 +43,7 @@ import re
 import socket
 import sys
 import tempfile
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -134,11 +135,11 @@ _DROP_RULES = [
     ("merged", r"합침|중복|같은 아이디어|i\d{3}.{0,20}흡수|기능으로 합"),
     ("cant_build", r"공개 ?API|쓰기 API|API.{0,6}(없|부재|미제공|미지원|미전달|전용)|build 불가|제작 불가|스크래핑|계정 자동화|브라우저 자동화|기술 정확도"),
     ("legal", r"변호사법|세무사|노무사|행정사|법무사|자격 업무|전문 ?자격|의료행위|신용정보법|약관(상|위반| 위험)|불법|위법|규제 위험|개인정보 거래|자격이 필요|인증 영역"),
-    ("one_off", r"한 번 (쓰고|고치면|하고)|1회성|일회성|평생 한두|한두 번"),
-    ("solved_free", r"무료로 (제공|공개|안내|지원|해결|할 수|쓸 수)|무료 (앱|대체|도구|계산기|플랜|서비스|양식|기능|제공|번들)|기본 (기능|내장|제공|탑재)|기본으로|네이티브|(정부|공공|국토부|고용노동부|식약처|관세청|국세청|KISA|지자체|보건소|고용24|홈택스).{0,25}(무료|제공|안내)|범용 AI|AI 래퍼|플랫폼 자체|자체 (AI|메뉴)|AI 신기능|카카오모먼트AI|AI 사전검수|GPT만|오픈소스|도 무료|무료화|월 0원|무료 요금제|기본 [가-힣]{0,6} ?기능|로 충분|으로 충분|로 해결됨"),
-    ("competitor", r"이미|경쟁|존재|제공 중|판매 중|운영 중|영업 중|다수|선점|앱 \d+개|제품 \d+개|기존 (유료|앱|도구|솔루션|제품|해결)|동일 (기능|패키지|목적)|같은 (기능|일|모델)|선검증 실패|포화|레드오션|솔루션.{0,10}(있|제공)|과 겹침|와 겹침"),
+    ("one_off", r"한 번 (쓰고|고치면|하고|만들면)|1회성|일회성|평생 한두|한두 번|반복성 (약|없)|거의 안 바뀜"),
+    ("solved_free", r"무료로 (제공|공개|안내|지원|해결|할 수|쓸 수)|무료 (앱|대체|도구|계산기|플랜|서비스|양식|기능|제공|번들)|기본 (기능|내장|제공|탑재)|기본으로|네이티브|(정부|공공|국토부|고용노동부|식약처|관세청|국세청|KISA|지자체|보건소|고용24|홈택스).{0,25}(무료|제공|안내)|범용 AI|AI 래퍼|플랫폼 자체|자체 (AI|메뉴)|AI 신기능|카카오모먼트AI|AI 사전검수|GPT만|오픈소스|도 무료|무료화|월 0원|무료 요금제|기본 [가-힣]{0,6} ?기능|로 충분|으로 충분|로 해결됨|solved_free|무료·저가|무료 등록으로|무료로 도움"),
+    ("competitor", r"이미|경쟁|존재|제공 중|판매 중|운영 중|영업 중|다수|선점|앱 \d+개|제품 \d+개|기존 (유료|앱|도구|솔루션|제품|해결)|동일 (기능|패키지|목적)|같은 (기능|일|모델)|선검증 실패|포화|레드오션|솔루션.{0,10}(있|제공)|과 겹침|와 겹침|기존 (연동|관리비|[가-힣]{1,6} 앱)"),
     ("small_market", r"시장.{0,6}작|규모.{0,8}(작|미달|좁)|소수|대상.{0,8}(적|좁)|지불 (의사|의향).{0,4}약|돈을 (안|내지)|월 ?300만 불가|고객 0명|revenue 2|수익성 2|너무 좁|대상이.{0,25}(한정|해당 없|맞지 않)|해당 없음|지불 유인|구독 근거"),
-    ("weak_evidence", r"원문.{0,4}(0건|없|못)|증거.{0,4}(없|부족|못|미충족)|확인 (못|안 ?됨)|못 찾|근거.{0,4}(부족|약|없|불충분)|미확인|미충족|사실 자체|하지 못|유추|간접 확인|검증하지"),
+    ("weak_evidence", r"원문.{0,4}(0건|없|못)|증거.{0,4}(없|부족|못|미충족)|확인 (못|안 ?됨)|못 찾|근거.{0,4}(부족|약|없|불충분)|미확인|미충족|사실 자체|하지 못|유추|간접 확인|검증하지|미확보|불확실|미확정|의무 대상 없|찾지 못"),
     ("no_pain", r"need 1|필요성 (1|2)|불편.{0,4}약"),
 ]
 
@@ -181,8 +182,8 @@ def ensure_drop_info(board):
         if d.get("manual"):
             continue
         reason = drop_reason_text(i)
-        if d.get("from") == reason and d.get("type"):
-            continue
+        if d.get("from") == reason and d.get("type") and d.get("type") != "other":
+            continue  # other는 규칙이 늘면 다시 분류한다
         kind, summary = classify_drop(i)
         i["drop"] = {"type": kind, "summary": summary, "from": reason, "manual": False}
 
@@ -197,7 +198,16 @@ def save(path, board):
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         json.dump(board, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
-    os.replace(tmp, path)
+    # Windows: the dashboard server may hold board.json open for a moment
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                os.remove(tmp)
+                raise
+            time.sleep(0.2)
 
 
 def validate(board):
@@ -512,6 +522,20 @@ def cmd_import(args):
         if not title:
             continue
         dup = similar_idea(board, title)
+        pf_new = str(r.get("prefilter", "")).strip()
+        if dup and (r.get("update_of") or dup.get("_imported_now")) and not dup.get("scores") \
+                and dup["stage"] in ("ideation", "incubating", "brainstorming") and pf_new:
+            # 하베스터가 같은 파일에 덧붙인 재확인 줄: 나중 판정이 이긴다
+            why = pf_new.split(":", 1)[-1].strip()
+            if pf_new.lower().startswith("drop"):
+                log(dup, dup["stage"], "dropped", "drop", "하베스터 재확인: " + why)
+                dup["stage"] = "dropped"
+                dropped += 1
+            elif pf_new.lower().startswith("hold"):
+                log(dup, dup["stage"], "ideation", "hold", "하베스터 재확인 보류: " + why)
+                dup["stage"], dup["hold"] = "ideation", why
+            print(f"{dup['id']}  재확인 반영 → {dup['stage']}: {title}")
+            continue
         if dup:
             print(f"skip (비슷한 아이디어 {dup['id']} {dup['title']}): {title}")
             skipped += 1
@@ -537,6 +561,7 @@ def cmd_import(args):
             "log": [], "created_at": now(), "updated_at": now(), "next_review": None,
         }
         board["ideas"].append(idea)
+        idea["_imported_now"] = True
         added += 1
         pf = str(r.get("prefilter", "pass")).strip()
         if pf.lower().startswith("hold"):
@@ -553,6 +578,8 @@ def cmd_import(args):
             log(idea, "incubating", "brainstorming", "go", "P-S 명확성 통과 · 사전 필터 통과")
             idea["stage"] = "brainstorming"
         print(f"{idea['id']}  {idea['stage']:<13} {title}")
+    for i in board["ideas"]:
+        i.pop("_imported_now", None)
     save(path, board)
     print(f"added {added} (사전 필터 drop {dropped}), skipped {skipped} duplicates")
     print(funnel_line(board))
