@@ -11,6 +11,7 @@ in lab/ideas/<id>.md.
   stats                         pass rate per discovery source (which harvester works)
   verify ID --ok|--fail --note  record the main session's spot-check of key evidence (needed for stage 4)
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
+  pending                       stage-3 ideas without scores (and which have an interrupted research file)
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
   bundle --remove ID..          take ideas out of their bundle
   list [--stage S]              show ideas grouped by stage, with scores
@@ -422,6 +423,8 @@ def cmd_import(args):
         note = f"[{r.get('source', '발굴')}] 출처 신호: {signal}" + (f"\n{url}" if url else "")
         if r.get("pay_signal"):
             note += f"\n지불 증거(출처 신호): {r['pay_signal']}"
+        if r.get("gap_signal"):
+            note += f"\n빈틈 증거(출처 신호): {r['gap_signal']}"
         idea = {
             "id": next_id(board), "title": title,
             "p_code": str(r.get("p", "")).strip(), "s_code": str(r.get("s", "")).strip(),
@@ -459,6 +462,39 @@ def cmd_verify(args):
         ("표본 검증 통과: " if args.ok else "표본 검증 실패: ") + args.note)
     save(path, board)
     print(f"{idea['id']}: 표본 검증 {'통과' if args.ok else '실패'}")
+    return 0
+
+
+def read_rows(file):
+    """Read a result file: a JSON array (.json) or one JSON object per line (.jsonl).
+    Later lines win for the same id, so a researcher can append corrections."""
+    text = Path(file).read_text(encoding="utf-8")
+    if str(file).endswith(".jsonl"):
+        rows = {}
+        for n, line in enumerate(text.splitlines(), 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                print(f"⚠ {file}:{n} JSON 오류 — 건너뜀")
+                continue
+            rows[r.get("id")] = r
+        return list(rows.values())
+    return json.loads(text)
+
+
+def cmd_pending(args):
+    """Ideas waiting for stage-3 research: whether a research file exists (interrupted run)."""
+    path = board_path(args)
+    board = load(path)
+    todo = [i for i in board["ideas"] if i["stage"] == "brainstorming" and not i.get("scores")]
+    with_md = [i for i in todo if research_path(path, i["id"]).exists()]
+    print(f"조사 대기 {len(todo)}개 (조사 파일은 있는데 점수 없음 {len(with_md)}개 — 중단된 조사)")
+    for i in todo:
+        mark = "md있음" if research_path(path, i["id"]).exists() else "      "
+        print(f"  {i['id']}  {mark}  {i['title']}")
     return 0
 
 
@@ -545,7 +581,7 @@ def cmd_apply(args):
     verdict, reason, pivot?, note?, login_needed?}]. Only ideas still in brainstorming are touched."""
     path = board_path(args)
     board = load(path)
-    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    rows = read_rows(args.file)
     applied = dropped = 0
     for r in rows:
         idea = next((i for i in board["ideas"] if i["id"] == r.get("id")), None)
@@ -577,8 +613,11 @@ def cmd_apply(args):
             reason = f"조사: {r.get('reason', '')}"
             if r.get("pivot"):
                 reason += f" · 피벗안: {r['pivot']}"
-            if r.get("verdict") in ("pass", "pivot"):
+            # 예외 후보는 조사원이 pass라고 했거나, 피벗안에 새 타깃의 근거 링크가 있을 때만
+            if r.get("verdict") == "pass" or (r.get("verdict") == "pivot" and r.get("pivot_evidence")):
                 reason += " · ⚑ 규칙 예외 후보(조사원은 " + r["verdict"] + ")"
+                if r.get("pivot_evidence"):
+                    reason += f" · 피벗 근거: {r['pivot_evidence']}"
             idea["stage"], idea["priority"] = "dropped", None
             log(idea, "brainstorming", "dropped", "drop", reason[:500])
             dropped += 1
@@ -821,6 +860,7 @@ def main():
 
     sub.add_parser("stats").set_defaults(func=cmd_stats)
     sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
+    sub.add_parser("pending").set_defaults(func=cmd_pending)
 
     p = sub.add_parser("bundle")
     p.add_argument("name", nargs="?")
