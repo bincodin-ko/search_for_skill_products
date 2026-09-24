@@ -828,7 +828,7 @@ def cmd_gated(args):
         if not m or "[로그인 확인" in i.get("notes", ""):
             continue
         sc = i.get("scores", {})
-        low = min(sc.get("need") or 0, sc.get("revenue") or 0)
+        low = min(sc.get("need") or 0, money(sc) or 0)
         failed = (i.get("verified") or {}).get("ok") is False
         live = i["stage"] not in ("dropped", "done")
         if args.all or live or (low == 2 and not failed):

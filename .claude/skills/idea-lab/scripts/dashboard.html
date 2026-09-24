@@ -188,7 +188,7 @@ const NEXT = { ideation: "incubating", incubating: "brainstorming", brainstormin
 const QUESTION = {
   ideation: "P-Code와 S-Code를 적었나?",
   incubating: "P-Code와 S-Code가 한 문장씩 명확한가?",
-  brainstorming: "필요성·수익성 2점 초과이고, 실험할 우선순위 안에 드는가?",
+  brainstorming: "필요성·수익성(유료 고객·유명세 중 높은 쪽) 2점 초과이고, 실험할 우선순위 안에 드는가?",
   filtering: "유의미한 니즈가 확인됐는가? (FDT)",
   review: "독점 가능성과 확장 가능성이 있는가?",
 };
@@ -443,7 +443,7 @@ function openIdea(id) {
         <div class="score"><span>${l}</span>${idea.prelim?.[k] != null ? `<span class="prelim">가안 ${idea.prelim[k]}</span>` : ""}<select name="score_${k}">
           <option value="">-</option>${[1, 2, 3, 4, 5].map((n) => `<option ${idea.scores?.[k] == n ? "selected" : ""}>${n}</option>`).join("")}
         </select></div>`).join("")}</div>
-      <div class="hint">필요성·수익성이 2 이하면 Drop 대상입니다. 평균은 필요성·수익성·10배·유통으로 계산합니다. '가안'은 조사 때 미리 매긴 점수이고, 따라 하기 어려움·해자·확장성은 5단계에서 확정합니다.</div>
+      <div class="hint">필요성이 2 이하이거나, 수익성(유료 고객)과 유명세 중 높은 쪽이 2 이하면 Drop 대상입니다. 평균은 필요성·(유료 고객·유명세 중 높은 쪽)·10배·유통으로 계산합니다. 필요성은 고통 또는 욕망, 유통은 모인 곳 또는 직접 만드는 유입 길 중 높은 쪽입니다. '가안'은 조사 때 미리 매긴 점수이고, 따라 하기 어려움·해자·확장성은 5단계에서 확정합니다.</div>
     </div>
     <div class="section">
       <h4>FDT (가짜 문 테스트)</h4>
