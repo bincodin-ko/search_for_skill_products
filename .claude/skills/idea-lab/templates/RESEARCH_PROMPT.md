@@ -46,3 +46,7 @@
    `{"id":"i000","need":3,"revenue":3,"tenx":3,"dist":3,"fit":3,"easy":2,"moat":2,"scale":3,"verdict":"pass|drop|pivot","reason":"근거 한 줄(사실)","pivot":"","note":"카드 메모용 3~5줄","login_needed":[],"pivot_evidence":"","revenue_math":{"price":"월 ₩19,900(경쟁사 X 월 ₩24,900, 2026-09 확인)","customers_needed":151,"basis":"1년 안에 모을 근거"}}` (한 줄)
    점수는 1~5 정수. 줄마다 JSON 문법이 맞아야 한다.
 3. 끝나면 pass/pivot 아이디어와 한 줄 이유만 120단어 이내로 돌려준다.
+
+
+## 로그인 뒤 출처
+로그인해야 보이는 출처(네이버 카페 본문, 아이보스 글, 인스타·X 계정, Reddit 댓글, 숨고 커뮤니티)는 직접 열지 말고 `login_sources`(결과 JSON) 또는 메모의 "로그인 필요 출처:"에 **정확한 URL 또는 사이트+검색어**로 적는다(예: `아이보스 ab-2110-30858`, `네이버 카페검색: 펜션 채널별 요금`). 메인이 Aside로 읽는다. "네이버 카페"처럼 막연하게 쓰면 쓸모가 없다.

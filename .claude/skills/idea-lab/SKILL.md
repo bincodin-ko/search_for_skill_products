@@ -12,6 +12,7 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 - `references/harvest.md` — 1단계 발굴(신호 하베스트·증거 세 개·마켓 캐시·사전 필터)
 - `references/research.md` — 3단계 조사·채점 기준표·예외 후보·피벗
 - `references/fdt.md` — 4단계 표본 검증·정성 게이트·묶음·가짜 문 테스트
+- `references/logins.md` — 로그인 출처(Aside) 규칙·세션 점검·`LAB gated`·사이트별 요령. **읽기만 한다**
 - `templates/` — 조사원·하베스터 공통 지시문(`RESEARCH_PROMPT.md`, `HARVEST_PROMPT.md`)과 FDT 페이지(`fdt.html`). `LAB init`이 지시문을 `lab/batches/`로 복사한다
 
 ## 원칙
@@ -29,20 +30,20 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 |---|---|---|
 | 하베스터 | 서브에이전트(Sonnet) | 1단계 신호 수집 |
 | 리서처 | 서브에이전트(Sonnet) | 3단계 조사, 4단계 원문 보강 |
-| 결정권자·검증자 | 메인 Claude | 채점 확정, 표본 검증, 판정 초안, 마켓 캐시·로그인 출처(Aside) |
+| 결정권자·검증자 | 메인 Claude | 채점 확정, 선검증·표본 검증, 판정 초안, 마켓 캐시, 로그인 출처(Aside, 읽기 전용 — `LAB gated`) |
 | 확인자 | 사용자 | 예외·피벗 승인, 트래픽, 최종 판정 |
 
 ## 5단계 흐름
 
 **1단계 Ideation** — 사용자가 준 아이디어는 P/S를 한 문장씩 채워 `LAB add`. 직접 발굴은 신호 하베스트로 한다: 후보마다 불편·지불·빈틈 증거 세 개, 하베스터별 통과율(`LAB stats`)과 고갈 지도(`LAB stats --tags`)로 비중을 정한다 → `references/harvest.md`
 
-**선검증** — 마켓 기반 후보는 조사원에게 보내기 전에 메인이 Aside로 마켓 검색 목록을 떠서 이미 있는 건 바로 Drop한다(조사원은 동적 검색 목록을 못 본다) → `references/harvest.md`
+**선검증** — 조사원에게 보내기 전에 메인이 모든 후보를 기능 키워드로 1번씩 검색하고, 마켓 기반 후보는 Aside로 마켓 검색 목록도 뜬다. 이미 있는 건 바로 Drop(실측: 조사 통과 10개 중 7개가 기존 제품) → `references/harvest.md`
 
 **2단계 Incubating** — "P-Code와 S-Code가 한 문장씩 명확한가?" 명확하면 `incubating` 후 바로 `brainstorming`(`LAB import`는 신호가 있으면 자동 통과). 두 번 불명확하면 Drop
 
 **3단계 Brainstorming** — 리서처 조사 → `LAB apply`로 채점·자동 Drop → `LAB rank`로 순서 확인(평균 need·revenue·tenx·dist, 같으면 fit) → 올릴 것은 표본 검증 후 `move .. filtering`, `LAB rank --apply`로 우선순위 → `references/research.md`
 
-**4단계 Filtering** — 표본 검증(`LAB verify`) → 정성 게이트 → 묶음(`LAB bundle`) → `LAB fdt-scaffold`로 랜딩페이지 → 배포·트래픽 → `LAB fdt`로 판정. 4·5단계는 최대 `max_parallel`(기본 10)개 → `references/fdt.md`
+**4단계 Filtering** — 표본 검증(`LAB verify`) → 정성 게이트 → 묶음(`LAB bundle`) → `LAB fdt-scaffold`로 랜딩페이지 → 배포·트래픽 → `LAB fdt`로 판정. 4·5단계 자리 수는 `max_parallel`(0 = 제한 없음, 이 보드는 0). 제한이 없으면 관문은 표본 검증뿐이고, FDT 순서는 `LAB rank`가 정한다 → `references/fdt.md`
 
 **5단계 2일마다 리뷰** — `LAB due`로 오늘 볼 것. 가안(prelim)에서 출발해 FDT 결과로 확정:
 - `easy`(5=따라 하기 어려움): 경쟁사가 금방 할 수 있나, 사용자 확보·운영 비용, 규제 / 데이터 확보, 최신 AI로 가능한가, 1인 기술력으로 되나

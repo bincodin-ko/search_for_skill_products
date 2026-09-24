@@ -13,6 +13,7 @@ in lab/ideas/<id>.md.
   exceptions                    list dropped rule-exception candidates and pivot ideas for user review
   pending                       stage-3 ideas without scores (and which have an interrupted research file)
   fdt-scaffold ID|BUNDLE        generate lab/fdt/<target>/index.html from the template (plans per idea, GA4, tracking)
+  gated [--all]                 ideas whose research left login-gated sources; default = only ones login data could still change
   rank [--apply]                rank scored ideas (avg need·revenue·tenx·dist, then fit); --apply sets stage-4 priorities
   bundle NAME ID ID.. --reason  group ideas that share a customer/engine so one FDT page tests them all
   bundle --remove ID..          take ideas out of their bundle
@@ -188,7 +189,8 @@ def funnel_line(board):
     ideas = board["ideas"]
     n = {st: sum(1 for i in ideas if i["stage"] == st) for st in STAGES}
     flow = " → ".join(f"{SHORT_LABELS[st]} {n[st]}" for st in STAGES[:6])
-    return f"{flow} · Drop {n['dropped']} · 병렬 {count_active(board)}/{board['settings']['max_parallel']}"
+    cap = board["settings"]["max_parallel"] or "∞"
+    return f"{flow} · Drop {n['dropped']} · 병렬 {count_active(board)}/{cap}"
 
 
 def cmd_init(args):
@@ -290,7 +292,8 @@ def cmd_move(args):
     idea = find(board, args.id)
     if args.stage in ACTIVE and idea["stage"] not in ACTIVE:
         active = count_active(board)
-        if active >= board["settings"]["max_parallel"] and not args.force:
+        cap = board["settings"]["max_parallel"]  # 0 = 제한 없음
+        if cap and active >= cap and not args.force:
             sys.exit(f"병렬 실험이 이미 {active}개입니다(최대 {board['settings']['max_parallel']}). --force로 무시")
     if args.stage == "filtering" and idea["stage"] != "filtering":
         missing = [k for k in ("need", "revenue") if k not in idea.get("scores", {})]
@@ -568,6 +571,30 @@ def cmd_fdt_scaffold(args):
     return 0
 
 
+GATED_RE = re.compile(r"로그인 필요 출처[:：]\s*(.+)")
+
+
+def cmd_gated(args):
+    """로그인 뒤 출처가 남은 아이디어. 로그인 정보는 불편·지불 증거를 '더할' 수만 있고 경쟁 제품을 없애지는 못하므로,
+    기본값은 증거 부족으로 떨어진 것(need·revenue 중 최저가 정확히 2, 표본 검증 실패 아님)과 진행 중인 것만 보여 준다."""
+    board = load(board_path(args))
+    rows = []
+    for i in board["ideas"]:
+        m = GATED_RE.search(i.get("notes", ""))
+        if not m or "[로그인 확인" in i.get("notes", ""):
+            continue
+        sc = i.get("scores", {})
+        low = min(sc.get("need") or 0, sc.get("revenue") or 0)
+        failed = (i.get("verified") or {}).get("ok") is False
+        live = i["stage"] not in ("dropped", "done")
+        if args.all or live or (low == 2 and not failed):
+            rows.append((0 if live else 1, i["id"], i["stage"], sc.get("need"), sc.get("revenue"), i["title"], m.group(1).strip()[:90]))
+    for _, iid, st, n, r, t, src in sorted(rows):
+        print(f"{iid}  [{st}] need {n} revenue {r}  {t}\n      볼 곳: {src}")
+    print(f"\n{len(rows)}개. 확인하면 `LAB note <id> --text \"[로그인 확인 날짜] ...\"`로 남긴다(다음 목록에서 빠진다)")
+    return 0
+
+
 def rank_key(i):
     s = i.get("scores", {})
     vals = [s.get(k) for k in ("need", "revenue", "tenx", "dist")]
@@ -589,10 +616,17 @@ def cmd_rank(args):
     for n, i in enumerate(f, 1):
         print(f"  P{n}  {fmt(i)}")
     worst = f[-1] if f else None
-    better = [i for i in b if worst is None or rank_key(i) < rank_key(worst)]
-    free = board["settings"]["max_parallel"] - count_active(board)
-    print(f"\n## 3단계 대기 중 4단계로 올릴 만한 것 (빈자리 {free}개)")
-    for i in better[: max(free, 3)]:
+    cap = board["settings"]["max_parallel"]
+    if cap:
+        better = [i for i in b if worst is None or rank_key(i) < rank_key(worst)]
+        free = cap - count_active(board)
+        print(f"\n## 3단계 대기 중 4단계로 올릴 만한 것 (빈자리 {free}개)")
+        better = better[: max(free, 3)]
+    else:
+        # 자리 제한 없음: 규칙(need·revenue ≥ 3)을 통과한 3단계 아이디어는 모두 후보, 표본 검증이 관문
+        better = [i for i in b if min(i["scores"].get("need", 0), i["scores"].get("revenue", 0)) >= 3]
+        print("\n## 3단계 대기 중 4단계로 올릴 것 (자리 제한 없음 — 표본 검증 통과가 관문)")
+    for i in better:
         print(f"  {fmt(i)}" + ("" if (i.get("verified") or {}).get("ok") else "  ← 올리기 전에 표본 검증 필요"))
     if not better:
         print("  없음")
@@ -998,6 +1032,10 @@ def main():
     p.set_defaults(func=cmd_stats)
     sub.add_parser("exceptions").set_defaults(func=cmd_exceptions)
     sub.add_parser("pending").set_defaults(func=cmd_pending)
+
+    p = sub.add_parser("gated")
+    p.add_argument("--all", action="store_true")
+    p.set_defaults(func=cmd_gated)
 
     p = sub.add_parser("rank")
     p.add_argument("--apply", action="store_true")
