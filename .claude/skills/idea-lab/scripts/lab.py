@@ -50,17 +50,17 @@ from pathlib import Path
 
 STAGES = ["ideation", "incubating", "brainstorming", "filtering", "review", "done", "dropped"]
 STAGE_LABELS = {
-    "ideation": "1. Ideation",
-    "incubating": "2. Incubating",
-    "brainstorming": "3. Brainstorming",
-    "filtering": "4. Filtering (FDT)",
-    "review": "5. 2일마다 리뷰",
-    "done": "DONE",
-    "dropped": "Drop",
+    "ideation": "1. 발굴 (Ideation) — 후보 모음·조사 전",
+    "incubating": "2. 사전 확인 (Incubating)",
+    "brainstorming": "3. 조사·관문 심사 중 (Brainstorming) — 검증 미완료",
+    "filtering": "4. 검증 완료 · 가짜 문 테스트 대기 (Filtering/FDT)",
+    "review": "5. 출시 후 2일마다 리뷰",
+    "done": "완료 (DONE)",
+    "dropped": "탈락 (Drop)",
 }
 SHORT_LABELS = {
-    "ideation": "Ideation", "incubating": "Incubating", "brainstorming": "Brainstorming",
-    "filtering": "Filtering", "review": "리뷰", "done": "DONE", "dropped": "Drop",
+    "ideation": "1 발굴", "incubating": "2 사전 확인", "brainstorming": "3 조사·심사 중",
+    "filtering": "4 검증 완료·FDT 대기", "review": "5 리뷰", "done": "완료", "dropped": "탈락",
 }
 ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]

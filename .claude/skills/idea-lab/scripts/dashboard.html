@@ -161,7 +161,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 <header>
   <div>
     <h1>될 놈 실험실</h1>
-    <div class="sub">Ideation → Incubating → Brainstorming → Filtering(FDT) → 2일마다 리뷰 → DONE</div>
+    <div class="sub">1 발굴(Ideation) → 2 사전 확인(Incubating) → 3 조사·관문 심사 중(Brainstorming, 검증 미완료) → 4 검증 완료·가짜 문 테스트 대기(Filtering/FDT) → 5 출시 후 리뷰 → 완료 · <b>살아있는 아이디어 = 4단계 이상(관문 6개 통과 + 메인 표본 검증 + 레드팀)</b></div>
   </div>
   <div class="spacer"></div>
   <button class="btn primary" id="addBtn">+ 아이디어</button>
@@ -359,8 +359,13 @@ function cardHtml(i) {
     const keys = ["compete", "pain", "pay", "math", "build", "redteam"];
     const n = keys.filter((k) => i.gate[k]?.v === "pass").length;
     const miss = keys.filter((k) => i.gate[k]?.v !== "pass");
-    chips.push(`<span class="chip ${n === 6 ? "go" : "retry"}" title="미통과: ${miss.join(", ")}">관문 ${n}/6</span>`);
+    const KO = {compete: "경쟁", pain: "불편 원문", pay: "지불 증거", math: "수익 계산", build: "4주 제작", redteam: "레드팀"};
+    chips.push(`<span class="chip ${n === 6 ? "go" : "retry"}" title="미통과: ${miss.map((k) => KO[k]).join(", ") || "없음"}">관문 ${n}/6</span>`);
   }
+  // 프로토타입(가짜 문 테스트) 전 단계의 검증 상태를 한눈에
+  if (["filtering", "review", "done"].includes(i.stage)) chips.push(`<span class="chip go" title="관문 6개 통과 + 메인 표본 검증 + 레드팀 — 살아있는 아이디어로 셈">✅ 사전 검증 완료</span>`);
+  else if (i.stage === "brainstorming" && i.bundle) chips.push(`<span class="chip" title="다른 살아있는 아이디어의 부가 기능 — 따로 세지 않음">묶음 부가기능(따로 안 셈)</span>`);
+  else if (i.stage === "brainstorming") chips.push(`<span class="chip retry" title="조사·관문 심사가 끝나지 않음 — 살아있는 아이디어로 세지 않음">검증 미완료</span>`);
   (i.tags || []).slice(0, 2).forEach((t) => chips.push(`<span class="chip">#${esc(t)}</span>`));
   if (i.fdt && i.fdt.verdict) {
     const rate = i.fdt.visits ? ((i.fdt.signups / i.fdt.visits) * 100).toFixed(1) + "%" : "";
@@ -465,7 +470,7 @@ function openIdea(id) {
       <div class="row"><label>이유</label><input name="reason" placeholder="판정 이유 한 줄"></div>
       <div class="actions">
         ${NEXT[idea.stage] ? `<button class="btn go" value="go">예 → ${esc(labels[NEXT[idea.stage]] || NEXT[idea.stage])}</button>` : ""}
-        ${idea.stage !== "dropped" ? `<button class="btn drop" value="drop">아니오 → Drop</button>` : `<button class="btn" value="revive">다시 Ideation으로</button>`}
+        ${idea.stage !== "dropped" ? `<button class="btn drop" value="drop">아니오 → Drop</button>` : `<button class="btn" value="revive">다시 1 발굴로</button>`}
         ${["filtering", "review"].includes(idea.stage) ? `<button class="btn hold" value="retry">재실험 / 보완</button>` : ""}
       </div>
     </div>
