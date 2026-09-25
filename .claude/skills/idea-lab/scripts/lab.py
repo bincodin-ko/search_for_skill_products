@@ -285,7 +285,10 @@ def judge_fdt(fdt, settings):
 def funnel_line(board):
     ideas = board["ideas"]
     n = {st: sum(1 for i in ideas if i["stage"] == st) for st in STAGES}
-    flow = " → ".join(f"{SHORT_LABELS[st]} {n[st]}" for st in STAGES[:6])
+    pend = sum(1 for i in ideas if i["stage"] == "filtering" and i.get("pay_pending") and not (i["pay_pending"] or {}).get("proven"))
+    parts = [f"{SHORT_LABELS[st]} {n[st] - (pend if st == 'filtering' else 0)}" for st in STAGES[:6]]
+    parts.insert(4, f"4-b 💳 지불 검증 필요 {pend}")
+    flow = " → ".join(parts)
     cap = board["settings"]["max_parallel"] or "∞"
     return f"{flow} · Drop {n['dropped']} · 병렬 {count_active(board)}/{cap}"
 
