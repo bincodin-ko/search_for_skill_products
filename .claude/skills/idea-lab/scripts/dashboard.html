@@ -293,10 +293,12 @@ function render() {
     <span>오늘 리뷰 <b>${due}</b></span>
     <span>FDT 기준: 방문 ${s.fdt_min_visits}명 이상 · 가입률 ${(s.fdt_go_rate * 100).toFixed(0)}% 통과 · ${(s.fdt_retry_rate * 100).toFixed(0)}% 미만 Drop</span>`;
 
-  const COLS = [...STAGES.slice(0, -1), "exceptions", "dropped"];
+  const COLS = ["ideation", "incubating", "brainstorming", "filtering", "paytest", "review", "done", "exceptions", "dropped"];
   $("board").innerHTML = COLS.map((st) => {
     const all = st === "exceptions" ? ideas.filter(isException)
       : st === "dropped" ? ideas.filter((i) => i.stage === "dropped" && !isException(i))
+      : st === "paytest" ? ideas.filter((i) => i.stage === "filtering" && i.pay_pending && !i.pay_pending.proven)
+      : st === "filtering" ? ideas.filter((i) => i.stage === "filtering" && !(i.pay_pending && !i.pay_pending.proven))
       : ideas.filter((i) => i.stage === st);
     let list = all.filter(matches).sort(sorters[view.sort] || sorters.priority);
     let filterBar = "";
@@ -314,7 +316,7 @@ function render() {
       body = `<div class="collapsed-note">${list.length}개 접힘 · <button class="btn" type="button" id="openDrop">펼치기</button></div>`;
     }
     return `<section class="col" data-stage="${st}">
-      <h2>${esc(st === "exceptions" ? "예외 후보(결정 필요)" : (labels[st] || st))} <span>${count}</span></h2>
+      <h2>${esc(st === "exceptions" ? "예외 후보(결정 필요)" : st === "paytest" ? "4-b. 💳 지불 검증 필요 — 가치 기반 통과, 가짜 문 테스트로 결제 의사 확인" : (labels[st] || st))} <span>${count}</span></h2>
       ${filterBar}${body}
     </section>`;
   }).join("");
@@ -363,7 +365,8 @@ function cardHtml(i) {
     chips.push(`<span class="chip ${n === 6 ? "go" : "retry"}" title="미통과: ${miss.map((k) => KO[k]).join(", ") || "없음"}">관문 ${n}/6</span>`);
   }
   // 프로토타입(가짜 문 테스트) 전 단계의 검증 상태를 한눈에
-  if (["filtering", "review", "done"].includes(i.stage)) chips.push(`<span class="chip go" title="관문 6개 통과 + 메인 표본 검증 + 레드팀 — 살아있는 아이디어로 셈">✅ 사전 검증 완료</span>`);
+  if (i.stage === "filtering" && i.pay_pending && !i.pay_pending.proven) chips.push(`<span class="chip due" title="지불 선례 대신 '돈을 낼 만큼의 손실·가치'로 지불 관문 통과 — 가짜 문 테스트에서 선결제·가격 확인 신청으로 결제 의사를 증명해야 함">💳 지불 검증 필요</span>`);
+  else if (["filtering", "review", "done"].includes(i.stage)) chips.push(`<span class="chip go" title="관문 6개 통과 + 메인 표본 검증 + 레드팀 — 살아있는 아이디어로 셈">✅ 사전 검증 완료</span>`);
   else if (i.stage === "brainstorming" && i.bundle) chips.push(`<span class="chip" title="다른 살아있는 아이디어의 부가 기능 — 따로 세지 않음">묶음 부가기능(따로 안 셈)</span>`);
   else if (i.stage === "brainstorming") chips.push(`<span class="chip retry" title="조사·관문 심사가 끝나지 않음 — 살아있는 아이디어로 세지 않음">검증 미완료</span>`);
   (i.tags || []).slice(0, 2).forEach((t) => chips.push(`<span class="chip">#${esc(t)}</span>`));

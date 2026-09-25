@@ -22,3 +22,6 @@
 출력: `lab/batches/audit<N>_<x>.jsonl` — 아이디어마다 한 줄, 즉시 덧붙인다:
 `{"id":"","queries":[],"competitors":[{"name":"","url":"","price":"","solves":"yes|partial|no","why":""}],"pain_quotes":[{"quote":"","url":"","date":"","independent":true}],"pay_evidence":[{"what":"","price":"","url":""}],"behavior_evidence":[{"what":"","url":""}],"fame_evidence":[{"what":"","url":""}],"login_sources":[],"verdict":"kill|weak|survive","reason":""}`
 아이디어당 검색 약 12회. 링크·숫자는 실제로 확인한 것만.
+
+## 가치 기반 지불(선례가 없을 때)
+돈을 낸 선례(`pay_evidence`)를 못 찾으면 `value_evidence`를 채운다(`references/research.md` '지불 관문 완화'): `{"loss_krw_year":숫자,"loss_sources":[링크 2개 이상],"frequency":"","current_spend":"","decision_maker":"","price_krw_year":숫자}` — 가격이 연 손실의 10% 이하이고 출처가 실제 사례여야 한다. 과장하지 말고, 손실 금액을 확인하지 못하면 비운다

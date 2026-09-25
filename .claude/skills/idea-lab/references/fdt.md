@@ -52,3 +52,6 @@
 - 니즈 확인 → `move <id> review --verdict go`
 - 없음(문제 없음·지불 의사 없음) → `move <id> dropped --verdict drop`
 - 모르겠음 → 실험 설계를 고쳐 다시(`retry`)
+
+## 💳 지불 검증 필요 아이디어의 FDT
+가치 기반으로 pay 관문을 통과한 아이디어(`pay_pending`)는 랜딩에 **가격을 보여 주고 선결제 또는 '이 가격에 결제 예약' 버튼**을 둔다. `LAB fdt --paid N`에서 N ≥ 1이어야 go, 아니면 가입률이 높아도 retry. 결제 의사가 확인되면 `pay_pending.proven`이 기록되고 4-b 칸에서 4단계 칸으로 옮겨진다

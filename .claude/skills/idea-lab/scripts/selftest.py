@@ -131,6 +131,16 @@ lab("import", write("sc.jsonl", [{"title": "테스트 SCAMPER 아이디어", "p"
 sc = board()["ideas"][-1]
 check(sc.get("origin") == "scamper" and "🔀 SCAMPER" in sc["notes"] and "🔀SCAMPER" in lab("list"), "발상법(SCAMPER) 아이디어: origin·메모·목록 표시")
 check("⚠ origin" in lab("import", write("bad.jsonl", [{"title": "테스트 잘못된 기법", "p": "p", "s": "s", "tags": ["B2B"], "prefilter": "pass", "origin": "magic"}])), "허락 안 된 발상법은 경고")
+lab("move", C, "brainstorming", "--force", "--reason", "가치 기반 지불 테스트", ok=False)
+ve_ok = {"loss_krw_year": 20000000, "loss_sources": ["https://a", "https://b"], "frequency": "연 2천 건", "decision_maker": "창업자", "price_krw_year": 300000}
+lab("audit", write("va.jsonl", [{"id": C, "queries": list(range(6)), "competitors": [], "pain_quotes": [], "pay_evidence": [], "value_evidence": ve_ok, "verdict": "weak", "reason": "r"}]))
+check(idea(C)["gate"]["pay"]["v"] == "pass" and idea(C).get("pay_pending") and "💳" in idea(C)["gate"]["pay"]["note"], "가치 기반 지불: 손실 10배·출처 2건·빈도·결정권자면 통과 + 💳 지불 검증 필요 표시")
+ve_bad = dict(ve_ok, price_krw_year=5000000)
+lab("audit", write("vb.jsonl", [{"id": C, "queries": list(range(6)), "competitors": [], "pain_quotes": [], "pay_evidence": [], "value_evidence": ve_bad, "verdict": "weak", "reason": "r"}]))
+check(idea(C)["gate"]["pay"]["v"] == "fail", "가치 기반 지불: 가격이 연 손실의 10% 넘으면 실패")
+lab("audit", write("vc.jsonl", [{"id": C, "queries": list(range(6)), "competitors": [], "pain_quotes": [], "pay_evidence": [{"x": 1}], "verdict": "weak", "reason": "r"}]))
+check(idea(C)["gate"]["pay"]["v"] == "pass" and not idea(C).get("pay_pending"), "실제 지불 증거가 생기면 💳 표시 해제")
+check("paytest" in (pathlib.Path(LAB).parent / "dashboard.html").read_text(encoding="utf-8"), "대시보드에 💳 지불 검증 필요 칸")
 print("4) gate·move: 6항목 통과 전엔 4단계 불가, 통과하면 가능")
 lab("verify", A, "--ok", "--note", "t")
 out = lab("move", A, "filtering", "--reason", "t", ok=False)

@@ -364,6 +364,8 @@ def cmd_list(args):
                 extra += f"  [묶음:{i['bundle']}]"
             if i.get("market") in ("global", "both"):
                 extra += "  🌍해외"
+            if i.get("pay_pending") and not (i["pay_pending"] or {}).get("proven"):
+                extra += "  💳지불검증필요"
             if i.get("origin") in ORIGINS:
                 extra += "  " + ORIGINS[i["origin"]].replace(" ", "")
             if i.get("hold") and i["stage"] == "ideation":
@@ -718,6 +720,32 @@ def bundle_gate(name, members):
     return 0
 
 
+def value_check(ve):
+    """가치 기반 지불 관문(사용자 승인 2026-09-25): 돈을 낸 선례가 없어도 '돈을 낼 만큼 가치 있는 문제'인지 숫자로 본다.
+    ① 한 고객이 1년에 잃는 돈·시간(loss_krw_year)이 출처 2건 이상으로 확인되고 ② 얼마나 자주·몇 명(frequency)
+    ③ 결제 결정권자와 예산(decision_maker) ④ 가격 가설(price_krw_year)이 연간 손실의 10% 이하(10배 가치)."""
+    if not isinstance(ve, dict) or not ve:
+        return False, ""
+    try:
+        loss = float(ve.get("loss_krw_year") or 0)
+        price = float(ve.get("price_krw_year") or 0)
+    except (TypeError, ValueError):
+        loss = price = 0
+    srcs = [s for s in (ve.get("loss_sources") or []) if str(s).strip()]
+    miss = []
+    if loss <= 0 or len(srcs) < 2:
+        miss.append("연간 손실 금액·출처 2건")
+    if not str(ve.get("frequency") or "").strip():
+        miss.append("발생 빈도·대상 규모")
+    if not str(ve.get("decision_maker") or "").strip():
+        miss.append("결제 결정권자")
+    if price <= 0 or (loss > 0 and price > loss * 0.1):
+        miss.append("가격이 연간 손실의 10% 이하")
+    if miss:
+        return False, "가치 기반 미충족(" + ", ".join(miss) + ")"
+    return True, f"가치 기반: 연 손실 ₩{loss:,.0f} vs 가격 ₩{price:,.0f}({price / loss:.0%}) · 출처 {len(srcs)}건"
+
+
 def cmd_audit(args):
     """레드팀 감사 결과(.jsonl)를 반영: 경쟁·불편·지불·레드팀 네 항목을 증거 개수로 자동 판정한다."""
     path = board_path(args)
@@ -750,8 +778,17 @@ def cmd_audit(args):
             ok = len(quotes) >= 3 or (len(quotes) >= 1 and len(beh) >= 2) or (want and len(beh) >= 3)
             g["pain"] = {"v": "pass" if ok else "fail", "note": f"독립 원문 {len(quotes)}건 · 행동 증거 {len(beh)}건" + (" (욕망형)" if want else ""), "at": now()}
         pay, fame_ev = r.get("pay_evidence") or [], r.get("fame_evidence") or []
-        g["pay"] = {"v": "pass" if pay or fame_ev else "fail",
-                    "note": f"지불 증거 {len(pay)}건" + (f" · 유명세 선례 {len(fame_ev)}건" if fame_ev else ""), "at": now()}
+        ve = r.get("value_evidence") or {}
+        value_ok, value_note = value_check(ve)
+        g["pay"] = {"v": "pass" if pay or fame_ev or value_ok else "fail",
+                    "note": f"지불 증거 {len(pay)}건" + (f" · 유명세 선례 {len(fame_ev)}건" if fame_ev else "")
+                            + (f" · {value_note}" if ve else ""), "at": now()}
+        # 지불 선례 없이 '돈을 낼 만큼의 가치'로만 통과하면 가짜 문 테스트에서 결제 의사를 증명해야 한다
+        if pay or fame_ev:
+            idea.pop("pay_pending", None)
+        elif value_ok:
+            idea["pay_pending"] = {"basis": ve, "at": now()}
+            g["pay"]["note"] += " → 💳 지불 검증 필요(FDT에서 선결제·가격 확인 신청으로 증명)"
         g["redteam"] = {"v": "fail" if r.get("verdict") == "kill" else "pass", "note": f"{r.get('verdict')}: {r.get('reason', '')}", "at": now()}
         idea["audit"] = r
         if r.get("login_sources"):
@@ -1246,6 +1283,14 @@ def cmd_fdt(args):
         "updated_at": now(),
     }
     fdt["verdict"], fdt["message"] = judge_fdt(fdt, board["settings"])
+    if idea.get("pay_pending"):
+        # 가치 기반으로 지불 관문을 통과한 아이디어는 결제 의사(선결제)가 1건 이상 나와야 go
+        if fdt["verdict"] == "go" and args.paid < 1:
+            fdt["verdict"] = "retry"
+            fdt["message"] += " · 💳 지불 검증 필요 아이디어라 선결제(또는 가격 확인 후 결제 예약) 1건 이상이 있어야 통과"
+        elif args.paid >= 1:
+            idea["pay_pending"]["proven"] = {"paid": args.paid, "at": now()}
+            fdt["message"] += f" · 💳 결제 의사 {args.paid}건 확인 — 지불 검증 완료"
     idea["fdt"] = fdt
     idea["updated_at"] = now()
     save(path, board)
