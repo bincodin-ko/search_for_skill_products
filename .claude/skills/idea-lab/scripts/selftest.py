@@ -144,6 +144,12 @@ check("paytest" in (pathlib.Path(LAB).parent / "dashboard.html").read_text(encod
 lab("move", C, "brainstorming", "--force", "--reason", "가치 기반 자동탈락 테스트", ok=False)
 lab("apply", write("vd.jsonl", [{"id": C, "need": 4, "revenue": 2, "verdict": "pass", "reason": "r", "value_evidence": ve_ok}]))
 check(idea(C)["stage"] == "brainstorming" and idea(C)["scores"]["revenue"] == 3, "가치 기반 증거가 있으면 revenue 2여도 자동 탈락하지 않음")
+lab("move", C, "brainstorming", "--force", "--reason", "조사+레드팀 한 번에 테스트", ok=False)
+comb = write("comb.jsonl", [{"id": C, "need": 4, "revenue": 3, "tenx": 3, "dist": 3, "fit": 3, "verdict": "pass", "reason": "조사 통과",
+        "queries": list(range(6)), "competitors": [], "pain_quotes": [{"text": "a", "url": "u", "independent": True}] * 3, "pay_evidence": [{"x": 1}],
+        "audit_verdict": "kill", "audit_reason": "레드팀이 죽임"}])
+lab("apply", comb); lab("audit", comb)
+check(idea(C)["gate"]["redteam"]["v"] == "fail" and "레드팀이 죽임" in idea(C)["gate"]["redteam"]["note"], "조사+레드팀 한 줄: audit_verdict로 레드팀 판정")
 print("4) gate·move: 6항목 통과 전엔 4단계 불가, 통과하면 가능")
 lab("verify", A, "--ok", "--note", "t")
 out = lab("move", A, "filtering", "--reason", "t", ok=False)

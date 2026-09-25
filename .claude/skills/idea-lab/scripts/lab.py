@@ -793,11 +793,14 @@ def cmd_audit(args):
         elif value_ok:
             idea["pay_pending"] = {"basis": ve, "at": now()}
             g["pay"]["note"] += " → 💳 지불 검증 필요(FDT에서 선결제·가격 확인 신청으로 증명)"
-        g["redteam"] = {"v": "fail" if r.get("verdict") == "kill" else "pass", "note": f"{r.get('verdict')}: {r.get('reason', '')}", "at": now()}
+        # 조사+레드팀 한 번에(사용자 승인 A): 조사 줄의 verdict(pass/drop)와 겹치지 않게 audit_verdict를 먼저 본다
+        av = r.get("audit_verdict") or r.get("verdict")
+        ar = r.get("audit_reason") or r.get("reason", "")
+        g["redteam"] = {"v": "fail" if av == "kill" else "pass", "note": f"{av}: {ar}", "at": now()}
         idea["audit"] = r
         if r.get("login_sources"):
             idea["notes"] += "\n로그인 필요 출처: " + " / ".join(r["login_sources"])
-        log(idea, idea["stage"], idea["stage"], "hold", f"레드팀 감사 {r.get('verdict')}: {r.get('reason', '')}")
+        log(idea, idea["stage"], idea["stage"], "hold", f"레드팀 감사 {av}: {ar}")
         n += 1
     save(path, board)
     print(f"감사 {n}건 반영. `LAB gate <id>`로 항목별 확인")

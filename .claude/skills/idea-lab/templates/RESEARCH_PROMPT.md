@@ -117,3 +117,8 @@ subscription(월 가격 × 고객 수) · success_fee(회수·절감액 × 수�
 로그인해야 보이는 출처(네이버 카페 본문, 아이보스 글, 인스타·X 계정, Reddit 댓글, 숨고 커뮤니티)는 직접 열지 말고 `login_sources`(결과 JSON) 또는 메모의 "로그인 필요 출처:"에 **정확한 URL 또는 사이트+검색어**로 적는다(예: `아이보스 ab-2110-30858`, `네이버 카페검색: 펜션 채널별 요금`). 메인이 Aside로 읽는다. "네이버 카페"처럼 막연하게 쓰면 쓸모가 없다.
 
 - **지불 선례가 없으면 버리지 말고 `value_evidence`를 채운다**(`references/research.md` '지불 관문 완화'): 한 고객 연간 손실(실제 사례 금액 출처 2건+)·빈도·결정권자·가격(손실의 10% 이하). 채우면 pass/hold로 두고 `"value_evidence":{...}`를 줄에 넣는다 — 대시보드 4-b 💳 칸으로 가서 FDT에서 결제 의사를 확인한다
+
+## 조사+레드팀 한 번에 (사용자 승인 2026-09-26, 속도 개선 A)
+조사를 마친 아이디어는 같은 줄에 **레드팀 감사 필드**도 채운다 — 별도 감사 단계를 돌리지 않는다. `templates/AUDIT_PROMPT.md`의 '죽일 근거 찾기'를 스스로 적용하고 아래를 덧붙인다:
+`"queries":[검색어 6개+],"competitors":[{"name":"","solves":"yes|partial|no|beatable","weakness":"","users":"","alive":"운영 확인 날짜"}],"pain_quotes":[{"text":"","url":"","date":"","independent":true}],"pay_evidence":[...],"value_evidence":{...},"audit_verdict":"kill|weak|survive","audit_reason":"관문별 한 줄(compete·pain·pay·math·build·redteam)"`
+메인은 이 파일로 `LAB apply`와 `LAB audit`을 차례로 돌리고, 핵심 근거 1~2개를 직접 열어 확인(`LAB verify`)한 뒤 관문을 판정한다
