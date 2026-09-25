@@ -1250,6 +1250,11 @@ def cmd_apply(args):
             log(idea, "brainstorming", "ideation", "hold", "타이밍 대기: " + str(r.get("reason", ""))[:300])
             idea["stage"] = "ideation"
             continue
+        vok, vnote = value_check(r.get("value_evidence") or {})
+        if vok and (money(sc) or 5) <= 2 and sc.get("need", 5) >= 3:
+            # 가치 기반 지불(연 손실 ≥ 가격 10배, 출처 2건)이 확인되면 선례가 없어 revenue가 낮게 매겨졌어도 자동 탈락시키지 않는다
+            sc["revenue"] = 3
+            idea["notes"] += f"\n수익성 3으로 조정: {vnote} — 💳 FDT에서 결제 의사 확인 필요"
         if sc.get("need", 5) <= 2 or (money(sc) or 5) <= 2:
             reason = f"조사: {r.get('reason', '')}"
             if r.get("pivot"):
