@@ -211,7 +211,7 @@ const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ 
 const AVG_KEYS = ["need", "money", "tenx", "dist"];
 const moneyOf = (s) => { const v = [s?.revenue, s?.fame].filter((x) => x != null); return v.length ? Math.max(...v) : null; };
 const avgOf = (i) => { const v = AVG_KEYS.map((k) => (k === "money" ? moneyOf(i.scores) : i.scores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-const ORIGIN_LABEL = {what_if: "💭 가정법", scamper: "🔀 SCAMPER", reverse: "🙃 역브레인스토밍", unbundle: "✂️ 가치사슬 쪼개기·묶기", lead_user: "🔬 극단 사용자", trend_cross: "✖️ 두 흐름 교차", jtbd: "🎯 해야 할 일(JTBD)", constraint: "⛓️ 제약 추가"};
+const ORIGIN_LABEL = {what_if: "💭 가정법", scamper: "🔀 SCAMPER", reverse: "🙃 역브레인스토밍", unbundle: "✂️ 가치사슬 쪼개기·묶기", lead_user: "🔬 극단 사용자", trend_cross: "✖️ 두 흐름 교차", jtbd: "🎯 해야 할 일(JTBD)", constraint: "⛓️ 제약 추가", ai_trend: "🤖 AI 신제품 활용"};
 const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, i.bundle || "", (i.tags || []).join(" "), (i.market === "global" || i.market === "both") ? "해외 global 🌍" : "", i.need_type === "want" ? "욕망형" : "", i.origin && ORIGIN_LABEL[i.origin] ? ORIGIN_LABEL[i.origin] + " 발상법 " + i.origin : ""].join(" ").toLowerCase().includes(view.q.toLowerCase());
 const sorters = {
   priority: (a, b) => (a.priority ?? 999) - (b.priority ?? 999) || (avgOf(b) ?? 0) - (avgOf(a) ?? 0),

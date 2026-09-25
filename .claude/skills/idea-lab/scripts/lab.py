@@ -74,6 +74,7 @@ ORIGINS = {
     "what_if": "💭 가정법", "scamper": "🔀 SCAMPER", "reverse": "🙃 역브레인스토밍",
     "unbundle": "✂️ 가치사슬 쪼개기·묶기", "lead_user": "🔬 극단 사용자", "trend_cross": "✖️ 두 흐름 교차",
     "jtbd": "🎯 해야 할 일(JTBD)", "constraint": "⛓️ 제약 추가",
+    "ai_trend": "🤖 AI 신제품 활용",
 }
 PAYERS = ["user","other_side", "sponsor", "government", "data_buyer", "partner"]  # 누가 내나(references/research.md 수익 구조 카탈로그)
 SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]

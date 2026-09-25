@@ -20,6 +20,8 @@
 
 **`constraint` 제약 추가** — 일부러 강한 제약을 건다: "카톡으로만", "앱 설치 없이 링크 하나", "1만 원 이하", "3분 안에 끝", "종이 한 장", "전화 한 통", "오프라인 60대가 혼자". 제약 때문에 생기는 새 설계가 기존 제품보다 나은 대상을 찾는다. `method: {"target":"","constraint":"","design":"","who_benefits":""}`
 
+**`ai_trend` AI 신제품 활용** (사용자 지시 2026-09-25) — 최근 1~3개월 사이 나오거나 바이럴된 AI 제품·모델·API(예: 사용자가 말한 'jev'·구글 '뮤즈' 류, 새 영상·음악·음성·3D·월드모델·에이전트·브라우저 AI 등)를 먼저 조사한다. 출처: Product Hunt·Hacker News·X 트렌드·Hugging Face 트렌딩·구글/OpenAI/Anthropic/메타/네이버/카카오 발표·국내 AI 뉴스(날짜·링크·사용자 수·바이럴 지표). 그다음 네 길로 아이디어를 만든다: ①**한국판·업종판 포장** — 새 능력을 한국어·특정 업종 일에 맞춰 바로 쓰게(원본이 한국어·한국 서비스 연동을 못 할 때) ②**새로 가능해진 창작물** — 그 AI로 이제 막 만들 수 있게 된 콘텐츠·상품(유명세 경로 가능) ③**곡괭이 팔기** — 그 도구 사용자들이 겪는 불편(프롬프트·템플릿·워크플로·결과물 관리·저작권 확인)을 푸는 도구 ④**바이럴 장난감** — 공유되는 재미형(want·fame). 반드시: 원본 제품이 같은 기능을 곧 넣을 위험(로드맵·업데이트 속도), API·약관(상업 이용·재판매 허용), 원가(호출 단가) 대비 가격. `method: {"ai_product":"이름·출시일·링크·지표","path":"localize|new_creation|picks_shovels|viral_toy","product":"","moat":"원본이 안 할 이유"}`
+
 ## 검증(모든 기법 공통 — 기준은 하베스트와 같다)
 - **지금 방식의 불편 증거**(원문 3건 또는 행동 증거) + **선례**(국내외 비슷한 성공·실패, 링크)가 없으면 drop
 - 경쟁(규모·아직 운영 중인지), 법 제한, 지불자(`payer`)·`revenue_math`, `dist_path`를 하베스트 규칙대로 적는다
@@ -27,7 +29,7 @@
 
 ## 출력
 `C:\Users\김현빈\ideas\lab\batches\<지시받은 파일>`에 한 줄씩(JSON Lines, UTF-8), 찾는 즉시 덧붙인다:
-`{"title":"","p":"누가·어떤 상황·어떤 문제","s":"해결책 + 수익 모델·가격 가설","tags":["B2B","업종"],"source":"발상법:<기법>","origin":"scamper|reverse|unbundle|lead_user|trend_cross|jtbd|constraint","method":{...},"precedent":"선례·링크","signal":"지금 방식의 불편 증거","signal_url":"https://...","pay_signal":"지불자와 지불 증거","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거","market":"kr|global|both","prefilter":"pass 또는 drop: 이유"}`
+`{"title":"","p":"누가·어떤 상황·어떤 문제","s":"해결책 + 수익 모델·가격 가설","tags":["B2B","업종"],"source":"발상법:<기법>","origin":"scamper|reverse|unbundle|lead_user|trend_cross|jtbd|constraint|ai_trend","method":{...},"precedent":"선례·링크","signal":"지금 방식의 불편 증거","signal_url":"https://...","pay_signal":"지불자와 지불 증거","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거","market":"kr|global|both","prefilter":"pass 또는 drop: 이유"}`
 끝나면 pass 후보만 100단어 이내로 돌려준다.
 
 - **지불 선례가 없으면 버리지 말고 `value_evidence`를 채운다**(`references/research.md` '지불 관문 완화'): 한 고객 연간 손실(실제 사례 금액 출처 2건+)·빈도·결정권자·가격(손실의 10% 이하). 채우면 pass/hold로 두고 `"value_evidence":{...}`를 줄에 넣는다 — 대시보드 4-b 💳 칸으로 가서 FDT에서 결제 의사를 확인한다

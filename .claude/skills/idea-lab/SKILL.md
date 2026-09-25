@@ -1,6 +1,6 @@
 ---
 name: idea-lab
-description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(Ideation → Incubating → Brainstorming → Filtering(FDT, 가짜 문 테스트) → 2일마다 리뷰)로 동시에 굴려서, 수요가 증명되고 해자가 있는 것만 남긴다. 후보는 두 길로 모은다 — 인터넷 불만 원문 하베스트, 그리고 발상법 8가지(가정법 What if·SCAMPER·역브레인스토밍·가치사슬 쪼개기·묶기·극단 사용자 관찰·두 흐름 교차·해야 할 일 JTBD·제약 추가, 대시보드에 기법별 표시). 수익은 쓰는 사람 구독만이 아니라 반대편 과금·후원 배포·정부 바우처·인증 배지·데이터 판매 등 누가 내는지까지 따진다.  경쟁사·가격·빈틈 조사를 근거로 채점하고, 메인이 핵심 근거를 직접 검증한 뒤 가짜 문 테스트로 넘긴다. 보드(lab/board.json)와 칸반 대시보드로 관리한다. "실험실", "될놈실험실", "아이디어 여러 개 걸러줘", "아이디어 더 찾아줘", "FDT", "페이크 도어", "아이디어 보드", "실험실 리뷰해줘", "가정법으로 아이디어", "SCAMPER", "발상법", "수익 구조" 같은 말이 나오면 사용. 아이디어 하나를 깊게 설계하는 건 idea-blueprint.
+description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(Ideation → Incubating → Brainstorming → Filtering(FDT, 가짜 문 테스트) → 2일마다 리뷰)로 동시에 굴려서, 수요가 증명되고 해자가 있는 것만 남긴다. 후보는 두 길로 모은다 — 인터넷 불만 원문 하베스트, 그리고 발상법 9가지(가정법 What if·SCAMPER·역브레인스토밍·가치사슬 쪼개기·묶기·극단 사용자 관찰·두 흐름 교차·해야 할 일 JTBD·제약 추가·최신 바이럴 AI 제품 활용, 대시보드에 기법별 표시). 수익은 쓰는 사람 구독만이 아니라 반대편 과금·후원 배포·정부 바우처·인증 배지·데이터 판매 등 누가 내는지까지 따진다.  경쟁사·가격·빈틈 조사를 근거로 채점하고, 메인이 핵심 근거를 직접 검증한 뒤 가짜 문 테스트로 넘긴다. 보드(lab/board.json)와 칸반 대시보드로 관리한다. "실험실", "될놈실험실", "아이디어 여러 개 걸러줘", "아이디어 더 찾아줘", "FDT", "페이크 도어", "아이디어 보드", "실험실 리뷰해줘", "가정법으로 아이디어", "SCAMPER", "발상법", "수익 구조", "AI 트렌드 아이디어" 같은 말이 나오면 사용. 아이디어 하나를 깊게 설계하는 건 idea-blueprint.
 ---
 
 # idea-lab (될 놈 실험실)
@@ -46,7 +46,7 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 
 **3단계 Brainstorming** — 리서처 조사 → `LAB apply`로 채점·자동 Drop → `LAB rank`로 순서 확인(평균 need·revenue·tenx·dist, 같으면 fit) → 올릴 것은 표본 검증 후 `move .. filtering`, `LAB rank --apply`로 우선순위 → `references/research.md`
 
-**발상 두 갈래** — ①불만 원문 하베스트(`templates/HARVEST_PROMPT.md`) ②발상법 8가지 — 가정법(`templates/WHATIF_PROMPT.md`)과 SCAMPER·역브레인스토밍·가치사슬 쪼개기·극단 사용자·두 흐름 교차·JTBD·제약 추가(`templates/IDEATION_METHODS.md`), `origin`으로 저장 → 대시보드·목록에 기법 이름 칩 표시. 둘 다 같은 관문을 지나며, 수익은 쓰는 사람 구독만이 아니라 `references/research.md`의 **수익 구조 카탈로그**(반대편 과금·후원 배포·정부 바우처·인증 배지·데이터·화이트라벨 등)와 지불자(`payer`)까지 본다
+**발상 두 갈래** — ①불만 원문 하베스트(`templates/HARVEST_PROMPT.md`) ②발상법 8가지 — 가정법(`templates/WHATIF_PROMPT.md`)과 SCAMPER·역브레인스토밍·가치사슬 쪼개기·극단 사용자·두 흐름 교차·JTBD·제약 추가·AI 신제품 활용(`templates/IDEATION_METHODS.md`), `origin`으로 저장 → 대시보드·목록에 기법 이름 칩 표시. 둘 다 같은 관문을 지나며, 수익은 쓰는 사람 구독만이 아니라 `references/research.md`의 **수익 구조 카탈로그**(반대편 과금·후원 배포·정부 바우처·인증 배지·데이터·화이트라벨 등)와 지불자(`payer`)까지 본다
 
 - **지불 실패로 버린 아이디어 재검토**: `templates/REVENUE_REVIEW_PROMPT.md`(반대편·후원사·정부·데이터 구매자·파트너 지불자 점검) → revive면 `LAB move <id> brainstorming --force --reason "지불자 재검토"` → `LAB apply` → 표본 검증 → 레드팀
 - **지불 관문 두 길**: 돈을 낸 선례(`pay_evidence`) 또는 **가치 기반**(`value_evidence`: 연 손실 출처 2건 + 빈도 + 결정권자 + 가격 ≤ 손실 10%). 가치 기반으로만 통과한 아이디어는 대시보드 `4-b 💳 지불 검증 필요` 칸에 모이고, FDT에서 선결제 1건 이상이 나와야 go(`LAB fdt`가 강제). 살아있는 수는 '확정(선례 있음)'과 '💳 지불 검증 필요'를 나눠 보고한다
