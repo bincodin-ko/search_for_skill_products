@@ -44,6 +44,8 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 
 **3단계 Brainstorming** — 리서처 조사 → `LAB apply`로 채점·자동 Drop → `LAB rank`로 순서 확인(평균 need·revenue·tenx·dist, 같으면 fit) → 올릴 것은 표본 검증 후 `move .. filtering`, `LAB rank --apply`로 우선순위 → `references/research.md`
 
+**발상 두 갈래** — ①불만 원문 하베스트(`templates/HARVEST_PROMPT.md`) ②가정법 발상(`templates/WHATIF_PROMPT.md`, `origin: what_if` → 대시보드 `💭 가정법` 표시). 둘 다 같은 관문을 지나며, 수익은 쓰는 사람 구독만이 아니라 `references/research.md`의 **수익 구조 카탈로그**(반대편 과금·후원 배포·정부 바우처·인증 배지·데이터·화이트라벨 등)와 지불자(`payer`)까지 본다
+
 **4단계 Filtering** — 진입 전 **될놈 관문 6항목**(`LAB gate`: 경쟁·불편 원문 3건·지불·수익 계산·4주 제작·레드팀) — 표본 검증 → 레드팀 감사(`templates/AUDIT_PROMPT.md` → `LAB audit`) → 메인 확정. 레드팀이 pain을 '원문이 로그인 카페 뒤라 못 봄'으로 떨어뜨리면 메인이 Aside로 네이버 카페 검색 탭 → 글의 `ArticleRead` 프레임 본문을 **읽기만** 해서 원문을 확보한 뒤 판정한다(보완 점검 #6: i1462 원문 7건 확보로 통과). 진입 후 정성 게이트 → 묶음(`LAB bundle`) → `LAB fdt-scaffold`로 랜딩페이지 → 배포·트래픽 → `LAB fdt`로 판정. 4·5단계 자리 수는 `max_parallel`(0 = 제한 없음, 이 보드는 0). 제한이 없으면 관문은 표본 검증뿐이고, FDT 순서는 `LAB rank`가 정한다 → `references/fdt.md`
 
 **5단계 2일마다 리뷰** — `LAB due`로 오늘 볼 것. 가안(prelim)에서 출발해 FDT 결과로 확정:

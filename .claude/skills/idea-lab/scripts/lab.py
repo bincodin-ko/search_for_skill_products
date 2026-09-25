@@ -66,7 +66,10 @@ ACTIVE = ("filtering", "review")
 VERDICTS = ["go", "drop", "hold", "retry"]
 MARKETS = ["kr", "global", "both"]  # global/both는 대시보드에 🌍 해외 표시
 NEED_TYPES = ["pain", "want"]  # need = 고통(불편·손실) 또는 욕망(재미·자랑·관계·호기심)
-REVENUE_MODELS = ["subscription", "success_fee", "transaction", "lead", "one_time", "ads", "other"]
+REVENUE_MODELS = ["subscription", "success_fee", "transaction", "lead", "one_time", "ads",
+                  "two_sided", "sponsor", "government", "verification", "data", "white_label",
+                  "usage", "membership", "embedded_fin", "presale", "other"]
+PAYERS = ["user", "other_side", "sponsor", "government", "data_buyer", "partner"]  # 누가 내나(references/research.md 수익 구조 카탈로그)
 SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]
 # fame = 무료라도 유명해져 돈이 되는 길(광고·파생 유료 제품·제휴·인수·홍보 채널). 수익성은 max(revenue, fame)로 본다
 # need <= 2 또는 수익성(max(revenue, fame)) <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
@@ -355,6 +358,8 @@ def cmd_list(args):
                 extra += f"  [묶음:{i['bundle']}]"
             if i.get("market") in ("global", "both"):
                 extra += "  🌍해외"
+            if i.get("origin") == "what_if":
+                extra += "  💭가정법"
             if i.get("hold") and i["stage"] == "ideation":
                 h = str(i["hold"])
                 extra += f"  [{h[:60]}]" if h.startswith("타이밍 대기") else "  [보류: 빈틈 증거 확인 필요]"
@@ -597,6 +602,13 @@ def cmd_import(args):
         }
         if r.get("need_type") in NEED_TYPES:
             idea["need_type"] = r["need_type"]
+        if r.get("origin") == "what_if" or isinstance(r.get("what_if"), dict):
+            # 가정법(What if?)으로 만든 아이디어 — 인터넷 불만 원문이 아니라 조건 뒤집기에서 출발. 대시보드·목록에 💭 가정법 표시
+            idea["origin"] = "what_if"
+            wi = r.get("what_if") if isinstance(r.get("what_if"), dict) else {}
+            idea["what_if"] = wi
+            if wi:
+                idea["notes"] += ("\n💭 가정법: " + " → ".join(str(wi.get(k, "")) for k in ("target", "flip", "consequence", "solution") if wi.get(k)))
         if r.get("behavior_signal"):
             idea["notes"] += f"\n행동 증거(출처 신호): {r['behavior_signal']}"
         if r.get("why_now"):
@@ -1157,10 +1169,17 @@ def cmd_apply(args):
             model = rm.get("model", "subscription")
             if model not in REVENUE_MODELS:
                 print(f"⚠ {idea['id']}: revenue_math.model '{model}'은 {REVENUE_MODELS} 중 하나여야 합니다")
-            idea["notes"] += (f"\n수익 계산({model}): {rm.get('formula') or ('가격 ' + str(rm.get('price', '?')) + ' × 필요 고객 ' + str(rm.get('customers_needed', '?')))}"
+            payer = rm.get("payer", "user")
+            if payer not in PAYERS:
+                print(f"⚠ {idea['id']}: revenue_math.payer '{payer}'은 {PAYERS} 중 하나여야 합니다")
+            idea["notes"] += (f"\n수익 계산({model}, 지불자 {payer}): {rm.get('formula') or ('가격 ' + str(rm.get('price', '?')) + ' × 필요 고객 ' + str(rm.get('customers_needed', '?')))}"
                               f" = 월 300만 원 · 근거: {rm.get('basis', '')}")
         elif idea["scores"].get("revenue", 0) >= 3:
             print(f"⚠ {idea['id']}: revenue {idea['scores']['revenue']}인데 revenue_math가 없습니다(조사원에게 보완 요청)")
+        if r.get("payer_check"):
+            idea["payer_check"] = r["payer_check"]
+            pc = r["payer_check"]
+            idea["notes"] += "\n지불자 점검: " + (" / ".join(f"{k}: {v}" for k, v in pc.items()) if isinstance(pc, dict) else str(pc))
         fm = r.get("fame_math")
         if isinstance(fm, dict) and fm:
             idea["fame_math"] = fm

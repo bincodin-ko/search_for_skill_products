@@ -1,3 +1,4 @@
+import pathlib
 """idea-lab 보완 기능 전체 점검 (보드 복사본에서 — 실제 보드는 건드리지 않는다).
 기준·lab.py·템플릿을 고친 뒤 반드시 실행: py -3 scripts/selftest.py [board.json]
 실패가 0이어야 발굴을 다시 시작한다."""
@@ -73,7 +74,7 @@ f = write("r.jsonl", [
 out = lab("apply", f)
 a = idea(A)
 check(a["stage"] == "brainstorming" and a["scores"].get("fame") == 3, "A: revenue 1이어도 fame 3이면 살아남음")
-check("수익 계산(ads)" in a["notes"] and "유명세 경로" in a["notes"] and "운영 부담" in a["notes"] and "직접 만드는 유입 길" in a["notes"], "A: 수익모델·유명세·운영부담·유입길 메모")
+check("수익 계산(ads" in a["notes"] and "유명세 경로" in a["notes"] and "운영 부담" in a["notes"] and "직접 만드는 유입 길" in a["notes"], "A: 수익모델·유명세·운영부담·유입길 메모")
 check(a.get("ops", {}).get("hours_month") == 10 and a.get("dist_path"), "A: ops·dist_path 필드 저장")
 check(idea(C)["stage"] == "dropped", "C: need 4여도 revenue 2·fame 없음이면 자동 Drop")
 check(idea(C).get("drop", {}).get("type") in ("small_market", "other", "competitor", "weak_evidence"), f"C: Drop 유형 분류됨({idea(C).get('drop', {}).get('type')})")
@@ -110,6 +111,21 @@ check(idea(C)["gate"]["compete"]["v"] == "pass" and "붐비는 시장 진입" in
 lab("score", C, "dist=3")
 lab("audit", f)
 check(idea(C)["gate"]["compete"]["v"] == "fail", "C: dist 3이면 crowded_winnable 있어도 compete 실패")
+lab("move", C, "brainstorming", "--force", "--reason", "수익 구조 재검토 테스트", ok=False)
+f = write("rev.jsonl", [{"id": C, "need": 4, "revenue": 3, "queries": list(range(6)), "competitors": [], "pain_quotes": [], "verdict": "weak", "reason": "r",
+                        "revenue_math": {"model": "two_sided", "payer": "other_side", "formula": "병원 60곳 × 월 5만", "basis": "b"},
+                        "payer_check": {"other_side": "병원 광고 가능", "government": "없음"}}])
+out = lab("apply", f)
+check("payer '" not in out and "model '" not in out and "지불자 other_side" in idea(C)["notes"] and bool(idea(C).get("payer_check")), "C: 새 수익 모델(two_sided)·지불자·지불자 점검 저장, 경고 없음")
+out = lab("apply", write("rev2.jsonl", [{"id": C, "need": 4, "revenue": 3, "queries": list(range(6)), "competitors": [], "pain_quotes": [], "verdict": "weak", "reason": "r",
+                        "revenue_math": {"model": "two_sided", "payer": "alien", "formula": "x", "basis": "b"}}]))
+check("payer 'alien'" in out, "C: 잘못된 지불자는 경고")
+n0 = len(board()["ideas"])
+lab("import", write("wi.jsonl", [{"title": "테스트 가정법 아이디어", "p": "p", "s": "s", "tags": ["B2B"], "source": "가정법", "prefilter": "pass",
+      "origin": "what_if", "what_if": {"target": "택시", "flip": "차를 하나도 안 가진다면", "consequence": "c", "solution": "s"}}]))
+wi = board()["ideas"][-1]
+check(len(board()["ideas"]) == n0 + 1 and wi.get("origin") == "what_if" and "💭 가정법" in wi["notes"] and "💭가정법" in lab("list"), "가정법 아이디어: origin 저장·메모·목록 표시")
+check("whatif" in (pathlib.Path(LAB).parent / "dashboard.html").read_text(encoding="utf-8"), "대시보드에 💭 가정법 칩")
 print("4) gate·move: 6항목 통과 전엔 4단계 불가, 통과하면 가능")
 lab("verify", A, "--ok", "--note", "t")
 out = lab("move", A, "filtering", "--reason", "t", ok=False)

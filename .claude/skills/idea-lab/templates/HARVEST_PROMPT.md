@@ -52,7 +52,9 @@
 
 ## 출력
 `C:\Users\김현빈\ideas\lab\batches\<파일명>.jsonl` — 후보마다 JSON 객체 한 줄:
-`{"title":"짧은 제목","p":"누가·어떤 상황·어떤 문제(한 문장)","s":"해결책 + 수익 모델·가격 가설(한 문장)","tags":["B2B","업종"],"source":"<하베스터 종류>","signal":"불편 증거","signal_url":"https://...","pay_signal":"지불 증거(가격·날짜)","gap_signal":"빈틈 증거(무엇을 열어 확인했나)","prefilter":"pass 또는 drop: 이유"}`
+`{"title":"짧은 제목","p":"누가·어떤 상황·어떤 문제(한 문장)","s":"해결책 + 수익 모델·가격 가설(한 문장)","tags":["B2B","업종"],"source":"<하베스터 종류>","signal":"불편 증거","signal_url":"https://...","pay_signal":"지불 증거(가격·날짜)","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거(무엇을 열어 확인했나)","prefilter":"pass 또는 drop: 이유"}`
 끝나면 후보 수·업종 분포·drop 수만 60단어 이내로 돌려준다.
 
 - **작업 파일은 자기 전용 폴더에만**: 스크래치 폴더는 여러 하베스터가 함께 쓴다. 보조 스크립트·임시 파일은 `scratchpad/<출력 파일 이름>/` 아래에만 만들고, 결과는 지시받은 출력 파일에만 쓴다(2026-09-25 h44·h45가 같은 add.py를 덮어써 줄이 섞임)
+
+- **누가 내나(`payer`)**: 쓰는 사람이 돈을 안 내도 버리지 않는다 — `references/research.md` 수익 구조 카탈로그의 반대편·후원사·정부 바우처·데이터 구매자·파트너를 각각 확인하고, 선례와 법적 길이 있는 지불자를 적는다

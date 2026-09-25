@@ -105,6 +105,7 @@ h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
 .chip.go { background: var(--go-soft); color: var(--go); }
 .chip.retry { background: var(--retry-soft); color: var(--retry); }
 .chip.global { background: #1d4ed8; color: #fff; font-weight: 600; }
+.chip.whatif { background: #7c3aed; color: #fff; font-weight: 600; }
 .chip.drop { background: var(--drop-soft); color: var(--drop); }
 .chip.hold { background: var(--hold-soft); color: var(--hold); }
 .chip.pri { background: var(--accent-soft); color: var(--accent); }
@@ -210,7 +211,7 @@ const saveView = () => { try { localStorage.setItem("labView", JSON.stringify({ 
 const AVG_KEYS = ["need", "money", "tenx", "dist"];
 const moneyOf = (s) => { const v = [s?.revenue, s?.fame].filter((x) => x != null); return v.length ? Math.max(...v) : null; };
 const avgOf = (i) => { const v = AVG_KEYS.map((k) => (k === "money" ? moneyOf(i.scores) : i.scores?.[k])).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, i.bundle || "", (i.tags || []).join(" "), (i.market === "global" || i.market === "both") ? "해외 global 🌍" : "", i.need_type === "want" ? "욕망형" : ""].join(" ").toLowerCase().includes(view.q.toLowerCase());
+const matches = (i) => !view.q || [i.id, i.title, i.p_code, i.s_code, i.notes, i.bundle || "", (i.tags || []).join(" "), (i.market === "global" || i.market === "both") ? "해외 global 🌍" : "", i.need_type === "want" ? "욕망형" : "", i.origin === "what_if" ? "가정법 whatif 💭" : ""].join(" ").toLowerCase().includes(view.q.toLowerCase());
 const sorters = {
   priority: (a, b) => (a.priority ?? 999) - (b.priority ?? 999) || (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
   score: (a, b) => (avgOf(b) ?? 0) - (avgOf(a) ?? 0),
@@ -349,6 +350,7 @@ function cardHtml(i) {
   if (i.parent) chips.push(`<span class="chip">← ${esc(i.parent)}</span>`);
   if (i.bundle) chips.push(`<span class="chip pri">묶음 ${esc(i.bundle)}</span>`);
   if (i.market === "global" || i.market === "both") chips.push(`<span class="chip global" title="해외 시장을 본 아이디어(${i.market === "both" ? "한국+해외" : "해외"})">🌍 해외</span>`);
+  if (i.origin === "what_if") chips.push(`<span class="chip whatif" title="가정법(What if?)으로 만든 아이디어 — 인터넷 불만 원문이 아니라 조건을 뒤집어 출발: ${((i.what_if && i.what_if.flip) || "").replace(/"/g, "&quot;")}">💭 가정법</span>`);
   if (i.need_type === "want") chips.push(`<span class="chip" title="고통이 아니라 욕망(재미·자랑·관계·호기심)으로 쓰는 제품">욕망형</span>`);
   if (i.scores?.fame != null && i.scores.fame >= 3) chips.push(`<span class="chip go" title="무료로 퍼져 돈이 되는 길(fame ${i.scores.fame})">유명세 ${i.scores.fame}</span>`);
   if (i.hold && String(i.hold).startsWith("타이밍 대기")) chips.push(`<span class="chip due" title="${esc(i.hold)}">타이밍 대기 ${esc(i.next_review || "")}</span>`);
