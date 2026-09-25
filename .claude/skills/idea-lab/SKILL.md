@@ -1,6 +1,6 @@
 ---
 name: idea-lab
-description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(Ideation → Incubating → Brainstorming → Filtering(FDT, 가짜 문 테스트) → 2일마다 리뷰)로 동시에 굴려서, 수요가 증명되고 해자가 있는 것만 남긴다. 신호 하베스트로 후보를 모으고, 경쟁사·가격·빈틈 조사를 근거로 채점하고, 메인이 핵심 근거를 직접 검증한 뒤 가짜 문 테스트로 넘긴다. 보드(lab/board.json)와 칸반 대시보드로 관리한다. "실험실", "될놈실험실", "아이디어 여러 개 걸러줘", "아이디어 더 찾아줘", "FDT", "페이크 도어", "아이디어 보드", "실험실 리뷰해줘" 같은 말이 나오면 사용. 아이디어 하나를 깊게 설계하는 건 idea-blueprint.
+description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(Ideation → Incubating → Brainstorming → Filtering(FDT, 가짜 문 테스트) → 2일마다 리뷰)로 동시에 굴려서, 수요가 증명되고 해자가 있는 것만 남긴다. 후보는 두 길로 모은다 — 인터넷 불만 원문 하베스트, 그리고 발상법 8가지(가정법 What if·SCAMPER·역브레인스토밍·가치사슬 쪼개기·묶기·극단 사용자 관찰·두 흐름 교차·해야 할 일 JTBD·제약 추가, 대시보드에 기법별 표시). 수익은 쓰는 사람 구독만이 아니라 반대편 과금·후원 배포·정부 바우처·인증 배지·데이터 판매 등 누가 내는지까지 따진다.  경쟁사·가격·빈틈 조사를 근거로 채점하고, 메인이 핵심 근거를 직접 검증한 뒤 가짜 문 테스트로 넘긴다. 보드(lab/board.json)와 칸반 대시보드로 관리한다. "실험실", "될놈실험실", "아이디어 여러 개 걸러줘", "아이디어 더 찾아줘", "FDT", "페이크 도어", "아이디어 보드", "실험실 리뷰해줘", "가정법으로 아이디어", "SCAMPER", "발상법", "수익 구조" 같은 말이 나오면 사용. 아이디어 하나를 깊게 설계하는 건 idea-blueprint.
 ---
 
 # idea-lab (될 놈 실험실)
@@ -10,6 +10,8 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 세부 규칙은 필요할 때만 읽는다:
 - `references/commands.md` — `LAB` 명령 전체와 주의사항
 - `references/harvest.md` — 1단계 발굴(신호 하베스트·증거 세 개·마켓 캐시·사전 필터)
+- `templates/WHATIF_PROMPT.md`·`templates/IDEATION_METHODS.md` — 발상법 8가지 절차(기법별 `origin` 표시)
+- `templates/REVENUE_REVIEW_PROMPT.md` — 지불 실패로 버린 아이디어의 지불자 재검토
 - `references/research.md` — 3단계 조사·채점 기준표·예외 후보·피벗
 - `references/fdt.md` — 4단계 표본 검증·정성 게이트·묶음·가짜 문 테스트
 - `references/logins.md` — 로그인 출처(Aside) 규칙·세션 점검·`LAB gated`·사이트별 요령. **읽기만 한다**
