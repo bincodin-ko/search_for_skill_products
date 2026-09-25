@@ -276,12 +276,16 @@ function judge(fdt, s) {
 
 function render() {
   const ideas = board.ideas;
-  const count = (st) => ideas.filter((i) => i.stage === st).length;
-  const max = Math.max(1, ...STAGES.map(count));
-  $("funnel").innerHTML = STAGES.map((st) => `
+  const payPend = (i) => i.stage === "filtering" && i.pay_pending && !i.pay_pending.proven;
+  const count = (st) => st === "paytest" ? ideas.filter(payPend).length
+    : st === "filtering" ? ideas.filter((i) => i.stage === "filtering" && !payPend(i)).length
+    : ideas.filter((i) => i.stage === st).length;
+  const FUNNEL = ["ideation", "incubating", "brainstorming", "filtering", "paytest", "review", "done", "dropped"];
+  const max = Math.max(1, ...FUNNEL.map(count));
+  $("funnel").innerHTML = FUNNEL.map((st) => `
     <div class="fstep ${st}">
       <div class="n">${count(st)}</div>
-      <div class="l">${esc(labels[st] || st)}</div>
+      <div class="l">${esc(st === "paytest" ? "4-b. 💳 지불 검증 필요 (가짜 문 테스트로 결제 의사 확인)" : (labels[st] || st))}</div>
       <div class="bar" style="width:${(count(st) / max) * 100}%"></div>
     </div>`).join("");
 
