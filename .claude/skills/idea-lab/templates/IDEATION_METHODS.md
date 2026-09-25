@@ -29,3 +29,5 @@
 `C:\Users\김현빈\ideas\lab\batches\<지시받은 파일>`에 한 줄씩(JSON Lines, UTF-8), 찾는 즉시 덧붙인다:
 `{"title":"","p":"누가·어떤 상황·어떤 문제","s":"해결책 + 수익 모델·가격 가설","tags":["B2B","업종"],"source":"발상법:<기법>","origin":"scamper|reverse|unbundle|lead_user|trend_cross|jtbd|constraint","method":{...},"precedent":"선례·링크","signal":"지금 방식의 불편 증거","signal_url":"https://...","pay_signal":"지불자와 지불 증거","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거","market":"kr|global|both","prefilter":"pass 또는 drop: 이유"}`
 끝나면 pass 후보만 100단어 이내로 돌려준다.
+
+- **지불 선례가 없으면 버리지 말고 `value_evidence`를 채운다**(`references/research.md` '지불 관문 완화'): 한 고객 연간 손실(실제 사례 금액 출처 2건+)·빈도·결정권자·가격(손실의 10% 이하). 채우면 pass/hold로 두고 `"value_evidence":{...}`를 줄에 넣는다 — 대시보드 4-b 💳 칸으로 가서 FDT에서 결제 의사를 확인한다
