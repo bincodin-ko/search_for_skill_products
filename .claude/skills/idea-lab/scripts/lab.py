@@ -1183,9 +1183,10 @@ def cmd_apply(args):
         idea = next((i for i in board["ideas"] if i["id"] == r.get("id")), None)
         if not idea:
             continue
-        if idea["stage"] in ("ideation", "incubating") and idea.get("hold"):
-            # 보류 후보를 조사원에게 바로 보낸 경우: 조사 결과가 곧 빈틈 확인이므로 3단계로 올려 반영한다
-            log(idea, idea["stage"], "brainstorming", "go", "보류 후보 조사 결과 반영")
+        if idea["stage"] in ("ideation", "incubating"):
+            # 보류·적체 후보를 조사원에게 바로 보낸 경우: 조사 결과가 곧 빈틈 확인이므로 3단계로 올려 반영한다
+            # (보완 #12: hold 표시가 없는 적체 카드도 매번 손으로 옮기던 문제)
+            log(idea, idea["stage"], "brainstorming", "go", "발굴 단계 후보 조사 결과 반영")
             idea["stage"] = "brainstorming"
         if idea["stage"] != "brainstorming":
             print(f"  건너뜀 {idea['id']}: 단계가 {idea['stage']}(3단계가 아님)")
