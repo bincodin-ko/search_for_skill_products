@@ -44,7 +44,7 @@ description: 될 놈 실험실 — 아이디어 여러 개를 5단계 깔때기(
 
 **3단계 Brainstorming** — 리서처 조사 → `LAB apply`로 채점·자동 Drop → `LAB rank`로 순서 확인(평균 need·revenue·tenx·dist, 같으면 fit) → 올릴 것은 표본 검증 후 `move .. filtering`, `LAB rank --apply`로 우선순위 → `references/research.md`
 
-**발상 두 갈래** — ①불만 원문 하베스트(`templates/HARVEST_PROMPT.md`) ②가정법 발상(`templates/WHATIF_PROMPT.md`, `origin: what_if` → 대시보드 `💭 가정법` 표시). 둘 다 같은 관문을 지나며, 수익은 쓰는 사람 구독만이 아니라 `references/research.md`의 **수익 구조 카탈로그**(반대편 과금·후원 배포·정부 바우처·인증 배지·데이터·화이트라벨 등)와 지불자(`payer`)까지 본다
+**발상 두 갈래** — ①불만 원문 하베스트(`templates/HARVEST_PROMPT.md`) ②발상법 8가지 — 가정법(`templates/WHATIF_PROMPT.md`)과 SCAMPER·역브레인스토밍·가치사슬 쪼개기·극단 사용자·두 흐름 교차·JTBD·제약 추가(`templates/IDEATION_METHODS.md`), `origin`으로 저장 → 대시보드·목록에 기법 이름 칩 표시. 둘 다 같은 관문을 지나며, 수익은 쓰는 사람 구독만이 아니라 `references/research.md`의 **수익 구조 카탈로그**(반대편 과금·후원 배포·정부 바우처·인증 배지·데이터·화이트라벨 등)와 지불자(`payer`)까지 본다
 
 - **지불 실패로 버린 아이디어 재검토**: `templates/REVENUE_REVIEW_PROMPT.md`(반대편·후원사·정부·데이터 구매자·파트너 지불자 점검) → revive면 `LAB move <id> brainstorming --force --reason "지불자 재검토"` → `LAB apply` → 표본 검증 → 레드팀
 - **새 발상법은 사용자 허락 뒤에만**: 가정법 외의 발상법(SCAMPER, 역브레인스토밍 등)을 쓰려면 먼저 목록·예시를 사용자에게 보여 주고 허락받은 것만 템플릿으로 만든다(사용자 지시 2026-09-25)

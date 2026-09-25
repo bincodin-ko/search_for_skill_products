@@ -69,7 +69,13 @@ NEED_TYPES = ["pain", "want"]  # need = 고통(불편·손실) 또는 욕망(재
 REVENUE_MODELS = ["subscription", "success_fee", "transaction", "lead", "one_time", "ads",
                   "two_sided", "sponsor", "government", "verification", "data", "white_label",
                   "usage", "membership", "embedded_fin", "presale", "other"]
-PAYERS = ["user", "other_side", "sponsor", "government", "data_buyer", "partner"]  # 누가 내나(references/research.md 수익 구조 카탈로그)
+# 발상법 출처(불만 원문 하베스트가 아닌 아이디어) — 대시보드·목록에 이 이름으로 표시. 새 기법은 사용자 허락 뒤에만 추가
+ORIGINS = {
+    "what_if": "💭 가정법", "scamper": "🔀 SCAMPER", "reverse": "🙃 역브레인스토밍",
+    "unbundle": "✂️ 가치사슬 쪼개기·묶기", "lead_user": "🔬 극단 사용자", "trend_cross": "✖️ 두 흐름 교차",
+    "jtbd": "🎯 해야 할 일(JTBD)", "constraint": "⛓️ 제약 추가",
+}
+PAYERS = ["user","other_side", "sponsor", "government", "data_buyer", "partner"]  # 누가 내나(references/research.md 수익 구조 카탈로그)
 SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]
 # fame = 무료라도 유명해져 돈이 되는 길(광고·파생 유료 제품·제휴·인수·홍보 채널). 수익성은 max(revenue, fame)로 본다
 # need <= 2 또는 수익성(max(revenue, fame)) <= 2 -> auto drop. dist = 첫 고객에게 닿는 길, fit = 창업자 적합도(settings.founder 기준)
@@ -358,8 +364,8 @@ def cmd_list(args):
                 extra += f"  [묶음:{i['bundle']}]"
             if i.get("market") in ("global", "both"):
                 extra += "  🌍해외"
-            if i.get("origin") == "what_if":
-                extra += "  💭가정법"
+            if i.get("origin") in ORIGINS:
+                extra += "  " + ORIGINS[i["origin"]].replace(" ", "")
             if i.get("hold") and i["stage"] == "ideation":
                 h = str(i["hold"])
                 extra += f"  [{h[:60]}]" if h.startswith("타이밍 대기") else "  [보류: 빈틈 증거 확인 필요]"
@@ -602,13 +608,18 @@ def cmd_import(args):
         }
         if r.get("need_type") in NEED_TYPES:
             idea["need_type"] = r["need_type"]
-        if r.get("origin") == "what_if" or isinstance(r.get("what_if"), dict):
-            # 가정법(What if?)으로 만든 아이디어 — 인터넷 불만 원문이 아니라 조건 뒤집기에서 출발. 대시보드·목록에 💭 가정법 표시
-            idea["origin"] = "what_if"
-            wi = r.get("what_if") if isinstance(r.get("what_if"), dict) else {}
-            idea["what_if"] = wi
-            if wi:
-                idea["notes"] += ("\n💭 가정법: " + " → ".join(str(wi.get(k, "")) for k in ("target", "flip", "consequence", "solution") if wi.get(k)))
+        origin = r.get("origin") or ("what_if" if isinstance(r.get("what_if"), dict) else None)
+        if origin in ORIGINS:
+            # 불만 원문이 아니라 발상법에서 출발한 아이디어 — 대시보드·목록에 기법 표시(templates/IDEATION_METHODS.md)
+            idea["origin"] = origin
+            detail = r.get("method") if isinstance(r.get("method"), dict) else (r.get("what_if") if isinstance(r.get("what_if"), dict) else {})
+            idea["method"] = detail
+            if origin == "what_if":
+                idea["what_if"] = detail
+            if detail:
+                idea["notes"] += (f"\n{ORIGINS[origin]}: " + " → ".join(f"{v}" for v in detail.values() if v))
+        elif r.get("origin"):
+            print(f"⚠ origin '{r['origin']}'은 {list(ORIGINS)} 중 하나여야 합니다")
         if r.get("behavior_signal"):
             idea["notes"] += f"\n행동 증거(출처 신호): {r['behavior_signal']}"
         if r.get("why_now"):

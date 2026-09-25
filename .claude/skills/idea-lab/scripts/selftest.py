@@ -126,6 +126,11 @@ lab("import", write("wi.jsonl", [{"title": "테스트 가정법 아이디어", "
 wi = board()["ideas"][-1]
 check(len(board()["ideas"]) == n0 + 1 and wi.get("origin") == "what_if" and "💭 가정법" in wi["notes"] and "💭가정법" in lab("list"), "가정법 아이디어: origin 저장·메모·목록 표시")
 check("whatif" in (pathlib.Path(LAB).parent / "dashboard.html").read_text(encoding="utf-8"), "대시보드에 💭 가정법 칩")
+lab("import", write("sc.jsonl", [{"title": "테스트 SCAMPER 아이디어", "p": "p", "s": "s", "tags": ["B2B"], "source": "발상법:scamper", "prefilter": "pass",
+      "origin": "scamper", "method": {"target": "가계부", "letter": "C", "change": "세금 신고 결합", "product": "x"}}]))
+sc = board()["ideas"][-1]
+check(sc.get("origin") == "scamper" and "🔀 SCAMPER" in sc["notes"] and "🔀SCAMPER" in lab("list"), "발상법(SCAMPER) 아이디어: origin·메모·목록 표시")
+check("⚠ origin" in lab("import", write("bad.jsonl", [{"title": "테스트 잘못된 기법", "p": "p", "s": "s", "tags": ["B2B"], "prefilter": "pass", "origin": "magic"}])), "허락 안 된 발상법은 경고")
 print("4) gate·move: 6항목 통과 전엔 4단계 불가, 통과하면 가능")
 lab("verify", A, "--ok", "--note", "t")
 out = lab("move", A, "filtering", "--reason", "t", ok=False)
