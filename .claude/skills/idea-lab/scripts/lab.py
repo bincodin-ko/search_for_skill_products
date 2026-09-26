@@ -576,6 +576,8 @@ def cmd_lint(args):
     rows = [r for f in args.files for r in read_rows(f) if str(r.get("title", "")).strip()]
     # 제목끼리는 괄호 속 부연을 빼고 비교(부연이 길면 같은 개념도 점수가 낮아짐), 새 제목이 옛 제목에 얼마나 들어 있는지(포함률)도 본다
     core = lambda t: re.sub(r"[(（\[].*?[)）\]]|—.*$", "", str(t))
+    # 보완 #21b: 게임 소재와 업무용 도구는 같은 주제(층간소음 등)여도 다른 제품 — 게임은 게임끼리만 비교
+    is_game = lambda tags, title="": any(str(t).startswith("게임") for t in (tags or [])) or "게임" in str(title)[-12:]
     olds = [(i, _bigrams(core(i.get("title", "")))) for i in board["ideas"]]
     dups, missing = [], []
 
@@ -594,12 +596,15 @@ def cmd_lint(args):
         if str(r.get("prefilter", "")).lower().startswith("drop"):
             continue
         bg = _bigrams(core(r["title"]))
-        best = max(((sim(bg, ob), i) for i, ob in olds), key=lambda x: x[0], default=(0, None))
+        rg = is_game(r.get("tags"), r["title"])
+        best = max(((sim(bg, ob), i) for i, ob in olds if is_game(i.get("tags"), i.get("title", "")) == rg),
+                   key=lambda x: x[0], default=(0, None))
         if best[0] >= args.threshold and not r.get("prior"):
             dups.append((r["title"], best[1]["id"], best[1]["stage"], best[1]["title"], best[0]))
             continue
         rt = rare(tok(r["title"])) - common
-        hit = max(((len(rt & ts), i) for i, ts in old_toks if ts is not None), key=lambda x: x[0], default=(0, None))
+        hit = max(((len(rt & ts), i) for i, ts in old_toks if ts is not None and is_game(i.get("tags"), i.get("title", "")) == rg),
+                  key=lambda x: x[0], default=(0, None))
         if hit[0] >= 2 and hit[0] >= 0.5 * len(rt) and not r.get("prior") and hit[1]["title"] != r["title"]:
             dups.append((r["title"], hit[1]["id"], hit[1]["stage"], hit[1]["title"] + " (드문 단어 겹침)", hit[0] / 10))
         if not str(r.get("prefilter", "")).lower().startswith("drop"):

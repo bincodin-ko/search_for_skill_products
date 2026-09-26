@@ -84,6 +84,8 @@ if rl.exists():
             for line in rl.read_text(encoding="utf-8").splitlines()[1:] if line.strip()]
     by = collections.defaultdict(lambda: [0.0, 0, 0, 0, 0])
     for r in recs:
+        if float(r.get("minutes") or 0) <= 0:
+            continue  # 소요 시간이 없는 줄은 속도 계산에서 뺀다(take/ingest에 --minutes를 꼭 넣을 것)
         k = (r.get("kind", ""), r.get("method", ""))
         b = by[k]
         b[0] += float(r.get("minutes") or 0); b[1] += int(r.get("tools") or 0)
