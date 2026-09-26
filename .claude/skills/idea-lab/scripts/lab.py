@@ -588,13 +588,17 @@ def cmd_lint(args):
     df = collections.Counter(w for _, ts in old_toks for w in ts)
     rare = lambda ts: {w for w in ts if df.get(w, 0) <= 5}
 
+    common = {"자동", "관리", "도우미", "알림", "장부", "엑셀", "버전", "계산", "기록", "비교", "대장", "판정", "점검", "리포트", "한국", "한국판", "전용", "무료", "서비스", "링크"}
     for r in rows:
+        # 보완 #19b: 발굴 단계에서 이미 버린 줄(prefilter drop)의 중복은 문제가 아니다 — 통과·보류 줄만 센다
+        if str(r.get("prefilter", "")).lower().startswith("drop"):
+            continue
         bg = _bigrams(core(r["title"]))
         best = max(((sim(bg, ob), i) for i, ob in olds), key=lambda x: x[0], default=(0, None))
         if best[0] >= args.threshold and not r.get("prior"):
             dups.append((r["title"], best[1]["id"], best[1]["stage"], best[1]["title"], best[0]))
             continue
-        rt = rare(tok(r["title"]))
+        rt = rare(tok(r["title"])) - common
         hit = max(((len(rt & ts), i) for i, ts in old_toks if ts is not None), key=lambda x: x[0], default=(0, None))
         if hit[0] >= 2 and hit[0] >= 0.5 * len(rt) and not r.get("prior") and hit[1]["title"] != r["title"]:
             dups.append((r["title"], hit[1]["id"], hit[1]["stage"], hit[1]["title"] + " (드문 단어 겹침)", hit[0] / 10))
@@ -607,7 +611,7 @@ def cmd_lint(args):
     n = len(rows)
     live = [r for r in rows if not str(r.get("prefilter", "")).lower().startswith("drop")]
     print(f"{', '.join(args.files)}: {n}줄 (통과·보류 {len(live)})")
-    print(f"① 옛 카드와 개념 중복 {len(dups)}건 ({len(dups) * 100 // max(1, n)}%) — 기준 10% 이하")
+    print(f"① 옛 카드와 개념 중복 {len(dups)}건 ({len(dups) * 100 // max(1, len(live))}% of 통과·보류) — 기준 10% 이하")
     for t, iid, st, ot, sc in dups[:15]:
         print(f"   {t[:40]} ≈ {iid}({st}) {ot[:40]} [{sc:.2f}]")
     print(f"② 필수 칸 누락 {len(missing)}건 ({len(missing) * 100 // max(1, len(live))}% of 통과·보류) — 기준 20% 이하")
@@ -618,7 +622,7 @@ def cmd_lint(args):
     print("③ 분포(통과·보류 기준) — 기법:", dict(dist(lambda r: r.get("origin") or r.get("source") or "?")))
     print("        시장:", dict(dist(lambda r: r.get("market") or "?")))
     print("        분야(첫 태그):", dict(dist(lambda r: (r.get("tags") or ["?"])[0])))
-    bad = len(dups) * 10 > n or len(missing) * 5 > max(1, len(live))
+    bad = len(dups) * 10 > max(1, len(live)) or len(missing) * 5 > max(1, len(live))
     print("판정:", "⚠ 기준 초과 — 지시문을 고치고 이 웨이브를 다시 돌릴지 판단" if bad else "통과")
     return 1 if bad else 0
 
