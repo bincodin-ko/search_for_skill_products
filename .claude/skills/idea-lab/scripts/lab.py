@@ -801,6 +801,12 @@ def cmd_audit(args):
         if r.get("login_sources"):
             idea["notes"] += "\n로그인 필요 출처: " + " / ".join(r["login_sources"])
         log(idea, idea["stage"], idea["stage"], "hold", f"레드팀 감사 {av}: {ar}")
+        if av == "kill" and idea["stage"] == "brainstorming":
+            # 보완 #13: 레드팀 kill인데 수익·필요 점수가 높아 apply 자동 탈락을 피한 카드가 3단계에 남던 문제
+            idea["stage"], idea["priority"] = "dropped", None
+            idea["drop"] = {"type": "weak_evidence", "summary": f"레드팀 kill: {ar}"[:80], "from": ar}
+            log(idea, "brainstorming", "dropped", "drop", f"레드팀 kill: {ar}"[:500])
+            print(f"  {idea['id']}: 레드팀 kill → 탈락")
         n += 1
     save(path, board)
     print(f"감사 {n}건 반영. `LAB gate <id>`로 항목별 확인")

@@ -122,3 +122,6 @@ subscription(월 가격 × 고객 수) · success_fee(회수·절감액 × 수�
 조사를 마친 아이디어는 같은 줄에 **레드팀 감사 필드**도 채운다 — 별도 감사 단계를 돌리지 않는다. `templates/AUDIT_PROMPT.md`의 '죽일 근거 찾기'를 스스로 적용하고 아래를 덧붙인다:
 `"queries":[검색어 6개+],"competitors":[{"name":"","solves":"yes|partial|no|beatable","weakness":"","users":"","alive":"운영 확인 날짜"}],"pain_quotes":[{"text":"","url":"","date":"","independent":true}],"pay_evidence":[...],"value_evidence":{...},"audit_verdict":"kill|weak|survive","audit_reason":"관문별 한 줄(compete·pain·pay·math·build·redteam)"`
 메인은 이 파일로 `LAB apply`와 `LAB audit`을 차례로 돌리고, 핵심 근거 1~2개를 직접 열어 확인(`LAB verify`)한 뒤 관문을 판정한다
+
+## 찾는 즉시 한 줄씩 저장 (2026-09-26 보완 #13)
+사용량 한도로 조사원이 중간에 멈추는 일이 있었다(m20·h65 결과 0줄 유실). 후보·결과는 **다 모아서 한 번에 쓰지 말고, 하나 끝날 때마다 출력 파일에 한 줄씩 덧붙인다.** 메인은 멈춘 조사원을 이어서 돌릴 때 이미 적힌 줄을 건너뛰게 한다.
