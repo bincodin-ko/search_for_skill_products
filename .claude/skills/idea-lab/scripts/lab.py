@@ -888,14 +888,28 @@ def cmd_fdt_scaffold(args):
 
     problems = "\n".join(
         f'        <div><h3>TODO 문제 {n}</h3><p>{e(i["p_code"])}</p></div>' for n, i in enumerate(ideas, 1))
-    plans = "\n".join(
-        f"""        <div class="plan">
+    def plan_cards(i):
+        # 보완 #14: 3단 가격(기본·표준·프로)이 있으면 가운데를 '추천'으로 두고 단계별 클릭을 따로 잰다(LAB fdt --tiers)
+        tiers = [t for t in ((i.get("revenue_math") or {}).get("tiers") or []) if isinstance(t, dict)][:3]
+        if len(tiers) == 3:
+            keys = ["basic", "standard", "pro"]
+            return "\n".join(
+                f"""        <div class="plan{' featured' if k == 'standard' else ''}">
+          {'<p class="badge">추천</p>' if k == 'standard' else ''}
+          <h3>{e(t.get("name", k))}</h3>
+          <div class="price" style="font-size:28px;font-weight:700">{e(t.get("price", "TODO 가격"))}</div>
+          <ul>{"".join(f"<li>{e(x)}</li>" for x in (t.get("includes") or ["TODO 포함 기능"]))}</ul>
+          <a class="btn" href="#notify" data-cta="plan_{e(i["id"])}_{k}" data-plan="{e(i["id"])}:{k}">이 가격으로 신청</a>
+        </div>""" for k, t in zip(keys, tiers))
+        return f"""        <div class="plan">
           <h3>{e(i["title"])}</h3>
           <p class="who">{e(i["p_code"][:80])}</p>
           <div class="price" style="font-size:28px;font-weight:700">{e(price_of(i))}</div>
           <ul><li>TODO 핵심 기능 1</li><li>TODO 핵심 기능 2</li></ul>
           <a class="btn" href="#notify" data-cta="plan_{e(i["id"])}" data-plan="{e(i["id"])}">이 가격으로 알림 받기</a>
-        </div>""" for i in ideas)
+        </div>"""
+
+    plans = "\n".join(plan_cards(i) for i in ideas)
     page = (tpl.replace("{{TITLE}}", e(first["title"]))
                .replace("{{BRAND}}", e(first["title"] if len(ideas) == 1 else f"TODO 브랜드({target})"))
                .replace("{{HEADLINE}}", e(first["p_code"]))
@@ -1236,6 +1250,16 @@ def cmd_apply(args):
                 print(f"⚠ {idea['id']}: revenue_math.payer '{payer}'은 {PAYERS} 중 하나여야 합니다")
             idea["notes"] += (f"\n수익 계산({model}, 지불자 {payer}): {rm.get('formula') or ('가격 ' + str(rm.get('price', '?')) + ' × 필요 고객 ' + str(rm.get('customers_needed', '?')))}"
                               f" = 월 300만 원 · 근거: {rm.get('basis', '')}")
+            # 보완 #14(사용자 승인 2026-09-27): 반복 매출 설계·3단 가격·단위 원가를 수익 계산의 필수 칸으로
+            for w in revenue_design_warnings(rm):
+                print(f"⚠ {idea['id']}: {w}")
+            rep = rm.get("repeat") or {}
+            if rep:
+                idea["notes"] += f"\n반복 매출({rep.get('type', '?')}): {rep.get('detail', '')}"
+            if rm.get("tiers"):
+                idea["notes"] += "\n3단 가격: " + " / ".join(f"{t.get('name', '')} {t.get('price', '?')}" for t in rm["tiers"] if isinstance(t, dict))
+            if rm.get("unit_cost") is not None:
+                idea["notes"] += f"\n단위 원가: {rm.get('unit_cost')} · 마진 {rm.get('gross_margin', '?')} · 변동비 부담 {rm.get('cost_passthrough', '우리')}"
         elif idea["scores"].get("revenue", 0) >= 3:
             print(f"⚠ {idea['id']}: revenue {idea['scores']['revenue']}인데 revenue_math가 없습니다(조사원에게 보완 요청)")
         if r.get("payer_check"):
@@ -1283,6 +1307,27 @@ def cmd_apply(args):
     return 0
 
 
+REPEAT_TYPES = ["subscription", "add_on_monthly", "usage", "participant_loop", "seasonal", "none"]
+
+
+def revenue_design_warnings(rm):
+    """보완 #14: 한 번 팔고 끝나는 구조·가격 한 개·원가 누락을 조사 단계에서 드러낸다."""
+    warns = []
+    rep = rm.get("repeat")
+    if not isinstance(rep, dict) or not rep.get("type"):
+        warns.append(f"revenue_math.repeat(반복 매출 설계: {REPEAT_TYPES})가 없습니다 — 한 번 판매 뒤 매달 받을 상품이나 참여자→주최자 루프를 적어야 합니다")
+    elif rep["type"] not in REPEAT_TYPES:
+        warns.append(f"revenue_math.repeat.type '{rep['type']}'은 {REPEAT_TYPES} 중 하나여야 합니다")
+    elif rep["type"] == "none":
+        warns.append("반복 매출 없음(repeat none) — 한 번 판매만으로 월 300만 원이 되는 근거(신규 고객 유입량)를 math에서 따로 보여야 합니다")
+    tiers = rm.get("tiers")
+    if not isinstance(tiers, list) or len(tiers) < 3:
+        warns.append("revenue_math.tiers(3단 가격: 기본·표준·프로)가 없습니다 — FDT에서 어느 단계를 누르는지로 지불 의사 금액을 잽니다")
+    if rm.get("unit_cost") is None:
+        warns.append("revenue_math.unit_cost(건당·월당 원가: API·서버·문자·인쇄)와 gross_margin이 없습니다")
+    return warns
+
+
 def cmd_fdt(args):
     path = board_path(args)
     board = load(path)
@@ -1301,7 +1346,23 @@ def cmd_fdt(args):
         "url": args.url or (idea.get("fdt") or {}).get("url", ""),
         "updated_at": now(),
     }
+    # 보완 #14: 3단 가격 중 어느 단계를 눌렀는지, 신청자가 직접 말한 연간 손실액
+    if args.tiers:
+        fdt["tier_clicks"] = dict(zip(["basic", "standard", "pro"], args.tiers))
+    if args.reported_loss:
+        fdt["reported_loss_krw_year"] = args.reported_loss
     fdt["verdict"], fdt["message"] = judge_fdt(fdt, board["settings"])
+    if fdt.get("tier_clicks"):
+        fdt["message"] += " · 3단 클릭 " + "/".join(f"{k} {v}" for k, v in fdt["tier_clicks"].items())
+    if fdt.get("reported_loss_krw_year"):
+        losses = sorted(fdt["reported_loss_krw_year"])
+        med = losses[len(losses) // 2]
+        fdt["reported_loss_median"] = med
+        fdt["message"] += f" · 신청자 응답 연 손실 중앙값 {med:,}원({len(losses)}명)"
+        ve = ((idea.get("pay_pending") or {}).get("basis")) or {}
+        price = ve.get("price_krw_year")
+        if price and med < price * 10:
+            fdt["message"] += f" · ⚠ 응답 손실이 가격({price:,}원)의 10배에 못 미침 — 가격 재설정 필요"
     if idea.get("pay_pending"):
         # 가치 기반으로 지불 관문을 통과한 아이디어는 결제 의사(선결제)가 1건 이상 나와야 go
         if fdt["verdict"] == "go" and args.paid < 1:
@@ -1522,6 +1583,10 @@ def main():
     p.add_argument("--signups", type=int, required=True)
     p.add_argument("--paid", type=int, default=0)
     p.add_argument("--url")
+    p.add_argument("--tiers", type=int, nargs=3, metavar=("BASIC", "STANDARD", "PRO"),
+                   help="3단 가격 버튼별 클릭 수")
+    p.add_argument("--reported-loss", dest="reported_loss", type=int, nargs="+",
+                   help="신청 폼에서 받은 '1년에 이 문제로 잃는 돈'(원) 응답들")
     p.set_defaults(func=cmd_fdt)
 
     p = sub.add_parser("fdt-start")

@@ -188,6 +188,20 @@ for t in ["RESEARCH_PROMPT.md"]:
     except Exception as e:
         check(False, f"{t} 결과 예시 JSON 파싱: {e}")
 
+print("8) 수익 설계 세 칸·FDT 3단 가격·손실 응답 (보완 #14)")
+sys.path.insert(0, str(pathlib.Path(LAB).parent))
+import importlib
+labmod = importlib.import_module("lab")
+w = labmod.revenue_design_warnings({"model": "subscription"})
+check(len(w) == 3, "revenue_design_warnings: repeat·tiers·unit_cost 누락 3건 경고")
+w = labmod.revenue_design_warnings({"repeat": {"type": "add_on_monthly"}, "tiers": [{}, {}, {}], "unit_cost": "건당 ₩300"})
+check(w == [], "revenue_design_warnings: 세 칸이 있으면 경고 없음")
+w = labmod.revenue_design_warnings({"repeat": {"type": "none"}, "tiers": [{}, {}, {}], "unit_cost": 0})
+check(any("repeat none" in x for x in w), "revenue_design_warnings: repeat none 경고")
+out = lab("fdt", C, "--visits", "300", "--signups", "20", "--tiers", "3", "9", "4", "--reported-loss", "500000", "3000000", "8000000")
+check("3단 클릭" in out and "중앙값 3,000,000원" in out, "fdt --tiers/--reported-loss 기록")
+check((idea(C).get("fdt") or {}).get("tier_clicks", {}).get("standard") == 9, "fdt tier_clicks 저장")
+
 shutil.rmtree(W, ignore_errors=True)
 print("\n결과:", "모두 통과" if not fails else f"{len(fails)}개 실패")
 for f_ in fails:

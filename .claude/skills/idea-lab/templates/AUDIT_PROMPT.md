@@ -25,3 +25,6 @@
 
 ## 가치 기반 지불(선례가 없을 때)
 돈을 낸 선례(`pay_evidence`)를 못 찾으면 `value_evidence`를 채운다(`references/research.md` '지불 관문 완화'): `{"loss_krw_year":숫자,"loss_sources":[링크 2개 이상],"frequency":"","current_spend":"","decision_maker":"","price_krw_year":숫자}` — 가격이 연 손실의 10% 이하이고 출처가 실제 사례여야 한다. 과장하지 말고, 손실 금액을 확인하지 못하면 비운다
+
+## 수익 설계 확인 (보완 #14)
+math를 볼 때 `revenue_math.repeat`가 `none`이거나 반복 상품이 억지(쓸 사람이 없는 월 구독)면 weak로 적고 이유를 쓴다. `unit_cost`가 가격에 비해 크면(마진 50% 미만) 적는다

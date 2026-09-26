@@ -91,6 +91,9 @@ footer { padding:30px 0 46px; font-size:13px; color:var(--muted); border-top:1px
 {{PLANS}}
       </div>
       <p class="small" style="margin-top:14px">부가세 별도. 출시 전 가격이며 바뀔 수 있어요.</p>
+      <!-- 보완 #14: 신청 폼(Tally)에 반드시 넣을 질문 두 개 — ① "지금 이 문제로 1년에 대략 얼마를 잃거나 쓰고 있나요?(원)" ② "지금은 이 문제를 어떻게 처리하고 있나요?(몇 명이, 어떤 도구로)" — 응답은 `LAB fdt --reported-loss`로 기록 -->
+      <!-- 가운데 '추천' 플랜 강조 스타일: .plan.featured { outline: 2px solid currentColor } .badge { font-size:12px; font-weight:700 } -->
+      <style>.plan.featured{outline:2px solid currentColor;outline-offset:-2px}.plan .badge{font-size:12px;font-weight:700;margin:0 0 6px}</style>
     </section>
 
     <section aria-labelledby="f-title">
