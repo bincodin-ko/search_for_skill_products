@@ -76,4 +76,26 @@ for m, s in rows:
     out.append(f"| {m} | {s['n']} | {s['pass']} | {s['r3']} | {s['alive']} | {s['alive'] * 100 / s['n']:.1f}% |")
 out += ["", "배분 규칙: 할당표 최소치(각 기법 6개)는 지키고, 남는 웨이브는 최근 생존율·3단계 도달률이 높은 칸에 더 준다(쏠림 상한 15개)."]
 (OUT / "yield.md").write_text("\n".join(out), encoding="utf-8")
-print(f"knowledge: titles {len(ideas)} · patterns {len(alive)} · yield {len(rows)}행 → {OUT}")
+# 4) speed.md — 보완 #19: 웨이브별 속도(시간당 통과·보류, 통과·보류당 도구 호출)를 기법별로 누적
+rl = OUT / "runlog.tsv"
+sp = ["# 속도 기록 (자동 생성 — lab.py take/ingest가 runlog.tsv에 쌓음)", ""]
+if rl.exists():
+    recs = [dict(zip(rl.read_text(encoding="utf-8").splitlines()[0].split("\t"), line.split("\t")))
+            for line in rl.read_text(encoding="utf-8").splitlines()[1:] if line.strip()]
+    by = collections.defaultdict(lambda: [0.0, 0, 0, 0, 0])
+    for r in recs:
+        k = (r.get("kind", ""), r.get("method", ""))
+        b = by[k]
+        b[0] += float(r.get("minutes") or 0); b[1] += int(r.get("tools") or 0)
+        b[2] += int(r.get("pass_hold") or 0); b[3] += int(r.get("alive_new") or 0); b[4] += 1
+    sp += ["| 종류 | 기법 | 웨이브 수 | 분 | 통과·보류(조사는 pass) | 시간당 통과·보류 | 통과·보류당 도구 호출 | 새 생존 |", "|---|---|---|---|---|---|---|---|"]
+    for (kind, m), (mins, tools, ph, alive_n, n) in sorted(by.items(), key=lambda kv: -(kv[1][2] / max(kv[1][0], 1))):
+        sp.append(f"| {kind} | {m} | {n} | {mins:.0f} | {ph} | {ph * 60 / max(mins, 1):.1f} | {tools / max(ph, 1):.1f} | {alive_n} |")
+    sp += ["", "읽는 법: 시간당 통과·보류가 오르고 통과·보류당 도구 호출이 내려가면 보완이 속도를 올린 것이다. 보완 점검마다 직전 묶음과 비교한다."]
+(OUT / "speed.md").write_text("\n".join(sp), encoding="utf-8")
+
+# 5) facts.tsv — 조사원이 확인한 사실(경쟁사 운영 여부·무료 공식 기능·법 조항·데이터 API) 공유 캐시. 파일만 보장(조사원이 덧붙임)
+facts = OUT / "facts.tsv"
+if not facts.exists():
+    facts.write_text("분야\t사실(무엇이 있다·없다·된다·안 된다)\t근거 URL\t확인일\t확인자\n", encoding="utf-8")
+print(f"knowledge: titles {len(ideas)} · patterns {len(alive)} · yield {len(rows)}행 · speed · facts → {OUT}")

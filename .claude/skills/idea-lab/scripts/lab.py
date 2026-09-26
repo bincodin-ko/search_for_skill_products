@@ -623,6 +623,52 @@ def cmd_lint(args):
     return 1 if bad else 0
 
 
+def _runlog(board_file, row):
+    """보완 #19: 웨이브마다 속도 기록 — knowledge.py가 speed.md(기법별 시간당 통과·보류)로 집계."""
+    kdir = Path(board_file).parent / "knowledge"
+    kdir.mkdir(exist_ok=True)
+    f = kdir / "runlog.tsv"
+    new = not f.exists()
+    with open(f, "a", encoding="utf-8") as fh:
+        if new:
+            fh.write("at\twave\tkind\tmethod\tminutes\ttools\tlines\tpass_hold\talive_new\n")
+        fh.write("\t".join(str(row.get(k, "")) for k in ["at", "wave", "kind", "method", "minutes", "tools", "lines", "pass_hold", "alive_new"]) + "\n")
+
+
+def _rebuild_knowledge(board_file):
+    import subprocess
+    subprocess.run([sys.executable, str(SCRIPT_DIR / "knowledge.py"), str(board_file)], check=False)
+
+
+def cmd_take(args):
+    rows = [r for r in read_rows(args.file) if str(r.get("title", "")).strip()]
+    live = [r for r in rows if not str(r.get("prefilter", "")).lower().startswith("drop")]
+    la = argparse.Namespace(**{**vars(args), "files": [args.file]})
+    rc = cmd_lint(la)
+    if rc and not args.force:
+        print("⚠ lint 기준 초과 — import하지 않았습니다. 지시문을 고쳐 다시 돌리거나 --force")
+        return rc
+    cmd_import(argparse.Namespace(**{**vars(args), "file": args.file}))
+    _runlog(board_path(args), {"at": now(), "wave": args.wave, "kind": "discover", "method": args.method or "?",
+                                "minutes": args.minutes, "tools": args.tools, "lines": len(rows), "pass_hold": len(live), "alive_new": 0})
+    _rebuild_knowledge(board_path(args))
+    return 0
+
+
+def cmd_ingest(args):
+    path = board_path(args)
+    before = {i["id"] for i in load(path)["ideas"] if i["stage"] in ("filtering", "review", "done")}
+    cmd_apply(argparse.Namespace(**{**vars(args), "file": args.file}))
+    cmd_audit(argparse.Namespace(**{**vars(args), "file": args.file}))
+    after = {i["id"] for i in load(path)["ideas"] if i["stage"] in ("filtering", "review", "done")}
+    rows = read_rows(args.file)
+    _runlog(path, {"at": now(), "wave": args.wave, "kind": "research", "method": "research", "minutes": args.minutes,
+                   "tools": args.tools, "lines": len(rows), "pass_hold": sum(1 for r in rows if r.get("verdict") == "pass"),
+                   "alive_new": len(after - before)})
+    _rebuild_knowledge(path)
+    return 0
+
+
 def cmd_import(args):
     """Bulk-add harvested candidates:
     [{title, p, s, tags:[..], signal, signal_url, source, prefilter:"pass"|"drop: <reason>", parent?}]
@@ -1669,6 +1715,23 @@ def main():
     p.add_argument("files", nargs="+", help="웨이브 파일 하나, 또는 묶음의 모든 파일(누적 분포)")
     p.add_argument("--threshold", type=float, default=0.45)
     p.set_defaults(func=cmd_lint)
+
+    p = sub.add_parser("take", help="발굴 웨이브 받기 한 번에: lint → (통과면) import → 속도 기록 → 지식 파일 재생성")
+    p.add_argument("file")
+    p.add_argument("--wave", required=True, help="웨이브 이름(예: B01-W4)")
+    p.add_argument("--method", default="", help="기법·출처")
+    p.add_argument("--minutes", type=float, default=0, help="웨이브 소요 분(작업 알림의 duration_ms/60000)")
+    p.add_argument("--tools", type=int, default=0, help="조사원 도구 호출 수(작업 알림 tool_uses)")
+    p.add_argument("--force", action="store_true", help="lint 기준 초과여도 import")
+    p.add_argument("--threshold", type=float, default=0.45)
+    p.set_defaults(func=cmd_take)
+
+    p = sub.add_parser("ingest", help="조사 결과 받기 한 번에: apply → audit → 속도 기록 → 지식 파일 재생성")
+    p.add_argument("file")
+    p.add_argument("--wave", required=True)
+    p.add_argument("--minutes", type=float, default=0)
+    p.add_argument("--tools", type=int, default=0)
+    p.set_defaults(func=cmd_ingest)
 
     p = sub.add_parser("stats")
     p.add_argument("--tags", action="store_true", help="saturation map by tag instead of by source")
