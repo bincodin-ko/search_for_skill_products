@@ -76,6 +76,9 @@ ORIGINS = {
     "unbundle": "✂️ 가치사슬 쪼개기·묶기", "lead_user": "🔬 극단 사용자", "trend_cross": "✖️ 두 흐름 교차",
     "jtbd": "🎯 해야 할 일(JTBD)", "constraint": "⛓️ 제약 추가",
     "ai_trend": "🤖 AI 신제품 활용",
+    # 보완 #18(사용자 지시 2026-09-27): 인터넷에 글로 안 쓰이는 숨은 문제 — 글이 아니라 흔적·업무·생애 사건·관찰에서 출발
+    "behavior_trace": "👣 행동 흔적", "job_task": "🧰 직무 분해",
+    "life_event": "🗺️ 생애 사건 지도", "observe_vlog": "📹 브이로그 관찰",
 }
 PAYERS = ["user","other_side", "sponsor", "government", "data_buyer", "partner"]  # 누가 내나(references/research.md 수익 구조 카탈로그)
 SCORE_KEYS = ["need", "revenue", "fame", "tenx", "dist", "fit", "easy", "moat", "scale"]

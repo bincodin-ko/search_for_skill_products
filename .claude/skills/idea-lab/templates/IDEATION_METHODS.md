@@ -29,9 +29,16 @@
 - 경쟁(규모·아직 운영 중인지), 법 제한, 지불자(`payer`)·`revenue_math`, `dist_path`를 하베스트 규칙대로 적는다
 - 재미있는 상상뿐이면 drop. 개수를 채우려고 억지로 만들지 않는다
 
+## 숨은 문제 발굴법 4가지 (사용자 지시 2026-09-27, 보완 #18)
+진짜 문제는 마음속에만 있고 글로 안 쓰이는 경우가 많다. 아래 넷은 **불만 글이 아니라 흔적·업무·사건·관찰**에서 가설을 만든 뒤 **행동 증거로 확인**한다(pain 관문의 '원문 1 + 행동 증거 2' 또는 '행동 증거 3' 길). 추측만 있으면 drop.
+- **`behavior_trace` 👣 행동 흔적** — 불평은 안 해도 남는 흔적: 네이버·구글 **자동완성·연관검색어**('~ 엑셀 양식', '~ 하는 법', '~ 자동', '~ 계산'), 양식 사이트(예스폼·비즈폼·해피캠퍼스) **다운로드·판매 수**, 크몽·숨고·탈잉 **의뢰·판매 건수**, 유튜브 '하는 법' **조회수**, 지식iN **질문 수**, 노션·엑셀 템플릿 마켓 판매. 우회 행동이 크고 반복될수록 숨은 불편. `method: {"trace":"흔적·숫자·링크","workaround":"지금 하는 우회","why_silent":"왜 글로 안 쓰나"}`
+- **`job_task` 🧰 직무 분해** — 국가직무능력표준(NCS, ncs.go.kr 능력단위·능력단위요소)·워크넷 직업정보로 한 직업을 업무 단위로 쪼개 하루를 재구성하고, **반복·실수 잦음·서류 많음·사람 사이 전달이 많은** 단계를 찾는다. 검색에 안 잡히는 직업(검침원·급식 조리사·학교 행정실·요양보호사·물류 입고 담당 등)을 일부러 고른다. `method: {"job":"직무명·NCS 코드","task":"문제 단계","evidence":"그 단계의 행동 흔적"}`
+- **`life_event` 🗺️ 생애 사건 지도** — 출생·입학·전학·입시·취업·이직·결혼·이사·출산·육아휴직·질병·사고·은퇴·상속·사망 × 당사자·가족·회사. 정부24 생애주기 안내로 할 일을 목록화하고 **처음 겪어서 막히는 단계**(서류 순서·기한·여러 기관 오가기)를 찾는다. 평생 1~2번이라 글로 남기기 전에 지나가는 문제 — 반복 매출이 약하니 유명세·반대편 과금·연례 반복 대상(회사 인사팀·중개인 등)을 함께 본다. `method: {"event":"","actor":"","stuck_step":"","evidence":""}`
+- **`observe_vlog` 📹 브이로그 관찰** — '○○ 브이로그'·'직업 하루'·'자영업 하루' 영상에서 불평 없이 반복하는 수작업을 찾는다. **조사원은 영상을 못 보므로** 제목·조회수·설명만 모으고 `"need_main_transcript":"영상 URL"`을 적는다 — 메인이 Aside로 자막(스크립트 패널)을 읽어 확인한다. `method: {"video":"URL·조회수","routine":"반복 수작업","evidence":""}`
+
 ## 출력
 `C:\Users\김현빈\ideas\lab\batches\<지시받은 파일>`에 한 줄씩(JSON Lines, UTF-8), 찾는 즉시 덧붙인다:
-`{"title":"","p":"누가·어떤 상황·어떤 문제","s":"해결책 + 수익 모델·가격 가설","tags":["B2B","업종"],"source":"발상법:<기법>","origin":"scamper|reverse|unbundle|lead_user|trend_cross|jtbd|constraint|ai_trend","method":{...},"precedent":"선례·링크","signal":"지금 방식의 불편 증거","signal_url":"https://...","pay_signal":"지불자와 지불 증거","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거","market":"kr|global|both","prefilter":"pass 또는 drop: 이유"}`
+`{"title":"","p":"누가·어떤 상황·어떤 문제","s":"해결책 + 수익 모델·가격 가설","tags":["B2B","업종"],"source":"발상법:<기법>","origin":"scamper|reverse|unbundle|lead_user|trend_cross|jtbd|constraint|ai_trend|behavior_trace|job_task|life_event|observe_vlog","method":{...},"precedent":"선례·링크","signal":"지금 방식의 불편 증거","signal_url":"https://...","pay_signal":"지불자와 지불 증거","payer":"user|other_side|sponsor|government|data_buyer|partner","gap_signal":"빈틈 증거","market":"kr|global|both","prefilter":"pass 또는 drop: 이유"}`
 끝나면 pass 후보만 100단어 이내로 돌려준다.
 
 - **지불 선례가 없으면 버리지 말고 `value_evidence`를 채운다**(`references/research.md` '지불 관문 완화'): 한 고객 연간 손실(실제 사례 금액 출처 2건+)·빈도·결정권자·가격(손실의 10% 이하). 채우면 pass/hold로 두고 `"value_evidence":{...}`를 줄에 넣는다 — 대시보드 4-b 💳 칸으로 가서 FDT에서 결제 의사를 확인한다
