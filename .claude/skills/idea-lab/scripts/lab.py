@@ -579,11 +579,22 @@ def cmd_lint(args):
     def sim(a, b):
         return max(len(a & b) / max(1, len(a | b)), len(a & b) / max(1, min(len(a), len(b))) * 0.8)
 
+    # 두 번째 신호(보완 #17): 드문 단어 겹침 — 괄호 속 약어(GOM 등)와 고유 명사가 가장 강한 단서인데 글자쌍은 동의어(공구↔공동구매)·짧은 제목에 약하다
+    tok = lambda t: {w for w in re.findall(r"[A-Za-z]{2,}|[가-힣]{2,}", str(t).lower())}
+    old_toks = [(i, tok(i.get("title", ""))) for i in board["ideas"]]
+    df = collections.Counter(w for _, ts in old_toks for w in ts)
+    rare = lambda ts: {w for w in ts if df.get(w, 0) <= 5}
+
     for r in rows:
         bg = _bigrams(core(r["title"]))
         best = max(((sim(bg, ob), i) for i, ob in olds), key=lambda x: x[0], default=(0, None))
         if best[0] >= args.threshold and not r.get("prior"):
             dups.append((r["title"], best[1]["id"], best[1]["stage"], best[1]["title"], best[0]))
+            continue
+        rt = rare(tok(r["title"]))
+        hit = max(((len(rt & ts), i) for i, ts in old_toks if ts is not None), key=lambda x: x[0], default=(0, None))
+        if hit[0] >= 2 and hit[0] >= 0.5 * len(rt) and not r.get("prior") and hit[1]["title"] != r["title"]:
+            dups.append((r["title"], hit[1]["id"], hit[1]["stage"], hit[1]["title"] + " (드문 단어 겹침)", hit[0] / 10))
         if not str(r.get("prefilter", "")).lower().startswith("drop"):
             miss = [f for f in LINT_FIELDS if not r.get(f)]
             if not (r.get("pay_signal") or r.get("value_evidence") or r.get("fame_math")):
