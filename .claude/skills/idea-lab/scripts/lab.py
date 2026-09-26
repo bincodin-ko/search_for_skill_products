@@ -35,6 +35,7 @@ in lab/ideas/<id>.md.
   serve [--port 8765]           open the dashboard (reads/writes board.json)
 """
 import argparse
+import collections
 import datetime as dt
 import difflib
 import json
@@ -555,6 +556,57 @@ def similar_idea(board, title, threshold=0.82):
         if n == m or (n and m and difflib.SequenceMatcher(None, n, m).ratio() >= threshold):
             return i
     return None
+
+
+LINT_FIELDS = ["signal_url", "pay_signal", "payer", "gap_signal", "market", "prefilter"]
+
+
+def _bigrams(s):
+    s = re.sub(r"[\s\W_]+", "", str(s).lower())
+    return {s[k:k + 2] for k in range(len(s) - 1)}
+
+
+def cmd_lint(args):
+    """100개 묶음 깔때기의 1차 안전장치(보완 #15): 발굴 파일이 도착하면 import 전에 돌린다.
+    ① 옛 카드와 개념 중복(제목·문제 글자쌍 겹침) ② 필수 칸 누락 ③ 기법·시장·분야 분포."""
+    board = load(board_path(args))
+    rows = [r for f in args.files for r in read_rows(f) if str(r.get("title", "")).strip()]
+    # 제목끼리는 괄호 속 부연을 빼고 비교(부연이 길면 같은 개념도 점수가 낮아짐), 새 제목이 옛 제목에 얼마나 들어 있는지(포함률)도 본다
+    core = lambda t: re.sub(r"[(（\[].*?[)）\]]|—.*$", "", str(t))
+    olds = [(i, _bigrams(core(i.get("title", "")))) for i in board["ideas"]]
+    dups, missing = [], []
+
+    def sim(a, b):
+        return max(len(a & b) / max(1, len(a | b)), len(a & b) / max(1, min(len(a), len(b))) * 0.8)
+
+    for r in rows:
+        bg = _bigrams(core(r["title"]))
+        best = max(((sim(bg, ob), i) for i, ob in olds), key=lambda x: x[0], default=(0, None))
+        if best[0] >= args.threshold and not r.get("prior"):
+            dups.append((r["title"], best[1]["id"], best[1]["stage"], best[1]["title"], best[0]))
+        if not str(r.get("prefilter", "")).lower().startswith("drop"):
+            miss = [f for f in LINT_FIELDS if not r.get(f)]
+            if not (r.get("pay_signal") or r.get("value_evidence") or r.get("fame_math")):
+                miss.append("지불근거(pay_signal|value_evidence|fame_math)")
+            if miss:
+                missing.append((r["title"], miss))
+    n = len(rows)
+    live = [r for r in rows if not str(r.get("prefilter", "")).lower().startswith("drop")]
+    print(f"{', '.join(args.files)}: {n}줄 (통과·보류 {len(live)})")
+    print(f"① 옛 카드와 개념 중복 {len(dups)}건 ({len(dups) * 100 // max(1, n)}%) — 기준 10% 이하")
+    for t, iid, st, ot, sc in dups[:15]:
+        print(f"   {t[:40]} ≈ {iid}({st}) {ot[:40]} [{sc:.2f}]")
+    print(f"② 필수 칸 누락 {len(missing)}건 ({len(missing) * 100 // max(1, len(live))}% of 통과·보류) — 기준 20% 이하")
+    for t, m in missing[:15]:
+        print(f"   {t[:40]}: {', '.join(m)}")
+    dist = lambda key: collections.Counter(key(r) for r in rows)
+    dist = lambda key: collections.Counter(key(r) for r in live)
+    print("③ 분포(통과·보류 기준) — 기법:", dict(dist(lambda r: r.get("origin") or r.get("source") or "?")))
+    print("        시장:", dict(dist(lambda r: r.get("market") or "?")))
+    print("        분야(첫 태그):", dict(dist(lambda r: (r.get("tags") or ["?"])[0])))
+    bad = len(dups) * 10 > n or len(missing) * 5 > max(1, len(live))
+    print("판정:", "⚠ 기준 초과 — 지시문을 고치고 이 웨이브를 다시 돌릴지 판단" if bad else "통과")
+    return 1 if bad else 0
 
 
 def cmd_import(args):
@@ -1598,6 +1650,11 @@ def main():
     p = sub.add_parser("import")
     p.add_argument("file")
     p.set_defaults(func=cmd_import)
+
+    p = sub.add_parser("lint", help="발굴 파일 import 전 점검: 옛 카드 중복·필수 칸·분포")
+    p.add_argument("files", nargs="+", help="웨이브 파일 하나, 또는 묶음의 모든 파일(누적 분포)")
+    p.add_argument("--threshold", type=float, default=0.45)
+    p.set_defaults(func=cmd_lint)
 
     p = sub.add_parser("stats")
     p.add_argument("--tags", action="store_true", help="saturation map by tag instead of by source")
